@@ -57,7 +57,7 @@ end
 local function Build()
     frame = CreateFrame("Frame", "SurvivorBeaconOptions", UIParent)
     frame:SetWidth(320)
-    frame:SetHeight(390)
+    frame:SetHeight(410)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:SetFrameStrata("DIALOG")
     frame:SetBackdrop({
@@ -92,10 +92,19 @@ local function Build()
     Check(frame, "friendPlates", "Turn friendly nameplates on for the beam", L, -162)
     Check(frame, "skull", "Skull raid icon on them", L, -186)
     Check(frame, "list", "List of who's down, how far and which way", L, -210)
-    Check(frame, "listLocked", "Lock the list (untick to drag it)", L, -234)
+    local unlock = PlainButton(frame, "Unlock list", 120)
+    unlock:SetPoint("TOPLEFT", frame, "TOPLEFT", L, -238)
+    unlock:SetScript("OnClick", function() SB.Set("listLocked", not SB.Get("listLocked")) end)
+    unlock.Refresh = function()
+        unlock:SetText(SB.Get("listLocked") and "Unlock list" or "Lock list")
+    end
+    table.insert(widgets, unlock)
+    local unlockHint = Text(frame, 10, 0.6, 0.6, 0.6)
+    unlockHint:SetPoint("LEFT", unlock, "RIGHT", 8, 0)
+    unlockHint:SetText("then drag it by its title")
 
-    Heading(frame, "Other", L, -266)
-    Check(frame, "minimapButton", "Show minimap button", L, -288)
+    Heading(frame, "Other", L, -276)
+    Check(frame, "minimapButton", "Show minimap button", L, -298)
 
     local test = PlainButton(frame, "Test", 90)
     test:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 16)
@@ -109,7 +118,7 @@ local function Build()
 
     local hint = Text(frame, 10, 0.6, 0.6, 0.6)
     hint:SetPoint("BOTTOM", frame, "BOTTOM", 0, 48)
-    hint:SetText("Test: a pretend teammate down 40 yd north-east, on your target's plate if you have one.")
+    hint:SetText("Test: a pretend teammate down where you stand, on your target's plate if you have one. Walk away to check it stays put.")
     hint:SetWidth(290)
 end
 

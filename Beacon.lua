@@ -6,8 +6,6 @@ local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
--- 1.12 outdoor minimap radius in yards for each zoom level.
-local MINIMAP_YARDS = { 233.33, 200, 166.67, 133.33, 100, 66.67 }
 
 local function SkullTexture(tex)
     tex:SetTexture(SKULL)
@@ -118,7 +116,7 @@ local function PlacePin(p, east, north, yards)
     local radius = (Minimap:GetWidth() or 140) / 2
     local px, py
     if yards then
-        local scale = radius / (MINIMAP_YARDS[(Minimap.GetZoom and Minimap:GetZoom() or 0) + 1] or 233.33)
+        local scale = radius / SB.MinimapRadiusYards()
         px, py = east * scale, north * scale
     else
         px, py = east * 1e6, north * 1e6 -- direction only: always on the rim

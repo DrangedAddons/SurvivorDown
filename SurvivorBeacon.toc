@@ -2,7 +2,7 @@
 ## Title: SurvivorBeacon
 ## Notes: Marks where a party member went down, on the minimap and over their body, so you can find and revive them.
 ## Author: Dranged
-## Version: 0.2.0
+## Version: 0.3.0
 ## SavedVariables: SurvivorBeaconDB
 
 Core.lua

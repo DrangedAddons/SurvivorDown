@@ -1,11 +1,15 @@
 -- SurvivorBeacon: marks where a party member went down so the others can find and revive them.
--- 1.12 has no call that turns a world position into a screen position, so the marker goes
--- where the client does give one: the minimap (from map coordinates) and the teammate's own
--- nameplate. Beacon.lua draws those, plus a call-out and a list with distance and direction.
+-- 1.12 has no call that turns a world position into a screen position, and the game gives
+-- addons no world x/y/z for players, so the marker goes where the client does place things:
+-- the minimap and the teammate's own nameplate. Beacon.lua draws those, plus a call-out and a
+-- list with distance and direction.
 --
 -- Where someone went down comes from, best first:
---   1. their own SurvivorBeacon, which sends its map position to the party while it's down;
---   2. GetPlayerMapPosition on their party unit, if the game fills it in for party members.
+--   1. a minimap ping: their SurvivorBeacon pings their own spot every few seconds while
+--      they're down. The client keeps a ping fixed in the world and Minimap:GetPingPosition
+--      gives it relative to you, so it needs no map coordinates (instances have none);
+--   2. map coordinates their SurvivorBeacon sends to the party while it's down;
+--   3. GetPlayerMapPosition on their party unit, if the game fills it in for party members.
 
 SurvivorBeacon = {}
 local SB = SurvivorBeacon
@@ -15,6 +19,10 @@ local PREFIX = "SBEACON"
 local SEND_EVERY = 2 -- s between our own DOWN messages while we're down
 local COMM_TIMEOUT = 8 -- s without a DOWN message before a teammate's own report counts as stale
 local NO_ADDON_WAIT = 3 -- s after a teammate goes down before we skull them ourselves
+local PING_EVERY = 3 -- s between our own minimap pings while we're down
+local PING_STALE = 10 -- s after a down's last ping before it no longer counts
+-- 1.12 outdoor minimap radius in yards for each zoom level.
+local MINIMAP_YARDS = { 233.33, 200, 166.67, 133.33, 100, 66.67 }
 
 SB.defaults = {
     alert = true, -- big "<name> is down" call-out
@@ -39,7 +47,7 @@ local KEEP_ON_RESET = { listX = true, listY = true, minimapButton = true, minima
 SB.downs = {}
 
 local db
-local selfDown, lastSent = false, 0
+local selfDown, lastSent, lastPing = false, 0, 0
 local markedSelf = false
 local marked = {} -- name -> true for teammates we put the skull on
 
@@ -173,10 +181,43 @@ function SB.PlayerPos()
     return x, y
 end
 
+function SB.MinimapRadiusYards()
+    return MINIMAP_YARDS[(Minimap.GetZoom and Minimap:GetZoom() or 0) + 1] or MINIMAP_YARDS[1]
+end
+
+-- name -> GetTime() of their last minimap ping. SB.pinger is whoever pinged last: the client
+-- keeps only one ping, so only theirs can be read live.
+local pings = {}
+SB.pinger = nil
+
+-- The current ping in yards east and north of you. 1.12 gives GetPingPosition as a fraction of
+-- the minimap's width; values far past that are taken as pixels, in case this client differs.
+local function PingYards()
+    if not Minimap.GetPingPosition then return nil end
+    local x, y = Minimap:GetPingPosition()
+    if type(x) ~= "number" or type(y) ~= "number" then return nil end
+    if math.abs(x) > 1.5 or math.abs(y) > 1.5 then
+        local width = Minimap:GetWidth() or 140
+        x, y = x / width, y / width
+    end
+    local diameter = 2 * SB.MinimapRadiusYards()
+    return x * diameter, y * diameter
+end
+SB.PingYards = PingYards
+
 -- Where a down is from here: yards east, yards north, and true if those are real yards. With
 -- no zone size the result is only good for a direction (3:2 map, unit-less) and the third
 -- value is false. nil when either position is unknown or they're in another zone.
 function SB.Offset(d)
+    local pinged = pings[d.name]
+    if pinged and (d.test or GetTime() - pinged < PING_STALE) then
+        -- Live while theirs is the last ping; otherwise where it was when someone else pinged.
+        if d.name == SB.pinger then
+            local e, n = PingYards()
+            if e then d.pe, d.pn, d.src = e, n, "ping" end
+        end
+        if d.pe then return d.pe, d.pn, true end
+    end
     if not d.mx then return nil end
     if d.zone and d.zone ~= "" and d.zone ~= (GetRealZoneText() or "") then return nil end
     local px, py = SB.PlayerPos()
@@ -268,8 +309,12 @@ local function UpdateSelf(now)
     local down = SelfIsDown()
     if down then
         if not selfDown then
-            selfDown, lastSent = true, 0
+            selfDown, lastSent, lastPing = true, 0, 0
             if db.skull then markedSelf = SetSkull("player", true) and true or false end
+        end
+        if now - lastPing >= PING_EVERY and Minimap.PingLocation then
+            lastPing = now
+            pcall(Minimap.PingLocation, Minimap, 0, 0) -- our own spot, for the party
         end
         if now - lastSent >= SEND_EVERY then
             lastSent = now
@@ -324,6 +369,15 @@ local function UpdateParty(now)
     end
 end
 
+-- MINIMAP_PING: arg1 is the unit that pinged. Our own pings are ignored; Test sets its own.
+local function OnPing(unit)
+    if not unit or unit == "player" or not UnitExists(unit) then return end
+    local name = UnitName(unit)
+    if not name then return end
+    SB.pinger = name
+    pings[name] = GetTime()
+end
+
 local function OnAddonMessage(msg, sender)
     if sender == UnitName("player") then return end
     local _, _, cmd, rest = string.find(msg, "^(%u+):?(.*)$")
@@ -347,28 +401,31 @@ end
 ---------------------------------------------------------------------------------------------
 -- Test
 
--- A pretend teammate down 40 yards north-east of you for 20 s. With a target, it takes the
--- target's name, so the nameplate beam shows on the target's plate.
+-- A pretend teammate down where you stand, for 30 s, placed with a minimap ping the same way a
+-- real one is: walk away and the list and minimap pin should stay on that spot. With a target,
+-- it takes the target's name, so the nameplate beam shows on the target's plate. The ping
+-- shows on your party's minimaps too.
+local TEST_SECS = 30
 function SB.Test()
-    local x, y = SB.PlayerPos()
-    if not x then
-        Print("no map position for you here, so the minimap pin can't be placed. The call-out and list still show.")
-    end
     local name = UnitExists("target") and UnitName("target") or "Test Hero"
-    local w, h = SB.ZoneSize()
-    local mx, my
-    if x then
-        if w then
-            mx, my = x + 28 / w, y - 28 / h
-        else
-            mx, my = x + 0.006, y - 0.006
-        end
-    end
     local _, class = UnitClass("player")
     RemoveDown(name)
-    AddDown(name, { class = class, mx = mx, my = my, zone = GetRealZoneText(), src = "test",
-        test = true, testEnds = GetTime() + 20 })
-    Print("test beacon on " .. name .. " for 20 s.")
+    local fields = { class = class, zone = GetRealZoneText(), src = "test", test = true,
+        testEnds = GetTime() + TEST_SECS }
+    local pinged = Minimap.PingLocation and pcall(Minimap.PingLocation, Minimap, 0, 0)
+    if pinged then
+        SB.pinger = name
+        pings[name] = GetTime()
+    else
+        local x, y = SB.PlayerPos()
+        fields.mx, fields.my = x, y
+        if not x then
+            Print("no minimap ping or map position here, so the test can't be placed. The call-out and list still show.")
+        end
+    end
+    AddDown(name, fields)
+    Print("test: " .. name .. " down where you stand for " .. TEST_SECS
+        .. " s. Walk away and the list and minimap pin should stay on this spot.")
 end
 
 ---------------------------------------------------------------------------------------------
@@ -416,6 +473,14 @@ function SB.Status()
         local r = AZS_REVIVE
         Print(string.format("revive line: down=%s share=%s by=%s reviving=%s rshare=%s",
             Fmt(r.down), Fmt(r.share), Fmt(r.by), Fmt(r.reviving), Fmt(r.rshare)))
+    end
+    if Minimap.GetPingPosition then
+        local px, py = Minimap:GetPingPosition()
+        local e, n = PingYards()
+        Print(string.format("minimap ping: raw %s, %s = %s yd east, %s yd north; last from %s",
+            Fmt(px), Fmt(py), Fmt(e), Fmt(n), Fmt(SB.pinger)))
+    else
+        Print("minimap ping: no GetPingPosition")
     end
     local on = SB.FriendPlatesOn and SB.FriendPlatesOn()
     Print("friendly nameplates: " .. (on == nil and "unknown (no CVar)" or (on and "on" or "off")))
@@ -468,6 +533,7 @@ frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("CHAT_MSG_ADDON")
+frame:RegisterEvent("MINIMAP_PING")
 frame:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" then
         if arg1 == "SurvivorBeacon" then
@@ -476,6 +542,8 @@ frame:SetScript("OnEvent", function()
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
         if SetMapToCurrentZone then SetMapToCurrentZone() end
+    elseif event == "MINIMAP_PING" then
+        OnPing(arg1)
     elseif event == "CHAT_MSG_ADDON" then
         if arg1 == PREFIX and db then OnAddonMessage(arg2 or "", arg4) end
     end
@@ -522,7 +590,7 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
             Print(string.format("  /asb %s - %s (%s)", k, text, (db and db[key]) and "on" or "off"))
         end
         Print("  /asb unlock | lock - move the list")
-        Print("  /asb test - a pretend teammate down 40 yd north-east for 20 s")
+        Print("  /asb test - a pretend teammate down where you stand for 30 s")
         Print("  /asb status - what the addon can see: party, positions, zone size")
         Print("  /asb reset - settings back to defaults")
     end

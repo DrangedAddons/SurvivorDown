@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+- **Positions from minimap pings.** While you're down, SurvivorBeacon pings your own spot on the minimap every 3 s. The game keeps a ping fixed in the world and reports where it is from each teammate, so their list distance and minimap pin follow that spot as they move. This works in instances, which have no map coordinates. Map coordinates are still used where there's no ping.
+- With two people down at once only the latest ping can be read live; the other's distance updates each time they ping (every 3 s).
+- **Unlock list** button in the settings, in place of the lock tickbox.
+- `/asb test` now puts the pretend teammate where you stand, placed by a ping, for 30 s. Walk away to check it stays put. The ping shows on your party's minimaps too.
+- `/asb status` shows the raw ping position and who pinged last.
+
 ## 0.2.0
 - **Settings window:** `/asb` or the new minimap button opens it. A tickbox for each part (call-out, sound, minimap pin, beam, friendly nameplates, skull, list, list lock, minimap button), plus Test and Status buttons.
 - **Minimap button:** the skull icon. Click opens the settings; drag moves it around the minimap. `/asb button` shows or hides it.
