@@ -186,17 +186,27 @@ local function FindPlate(name)
     end
 end
 
--- Friendly nameplates are what the beam hangs on. Turned on only if they were off, and back
--- off once nobody's down.
+SB.FindPlate = FindPlate
+
+-- The game has no nameplateShowFriends CVar (GetCVar errors), so there's no telling whether
+-- friendly plates were already on. nil when unknown.
+local function FriendPlatesOn()
+    local ok, v = pcall(GetCVar, "nameplateShowFriends")
+    if ok then return v == "1" end
+end
+SB.FriendPlatesOn = FriendPlatesOn
+
+-- Friendly nameplates are what the beam hangs on. Turned on while someone's down unless known
+-- to be on already, and back off once nobody's down.
 local friendsOn = false
 local function FriendPlates(want)
     if want and not friendsOn then
-        if GetCVar("nameplateShowFriends") ~= "1" and ShowFriendNameplates then
-            ShowFriendNameplates()
+        if not FriendPlatesOn() and ShowFriendNameplates then
+            pcall(ShowFriendNameplates)
             friendsOn = true
         end
     elseif not want and friendsOn then
-        if HideFriendNameplates then HideFriendNameplates() end
+        if HideFriendNameplates then pcall(HideFriendNameplates) end
         friendsOn = false
     end
 end

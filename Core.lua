@@ -393,9 +393,11 @@ function SB.Status()
         if UnitExists(u) then
             n = n + 1
             local px, py = GetPlayerMapPosition(u)
-            Print(string.format("%s: %s, down %s, health %s/%s, map %s", u, UnitName(u) or "?",
-                tostring(UnitDown(u)), Fmt(UnitHealth(u)), Fmt(UnitHealthMax(u)),
-                (px and not (px == 0 and py == 0)) and string.format("%.4f, %.4f", px, py) or "none"))
+            local plate = SB.FindPlate and SB.FindPlate(UnitName(u) or "")
+            Print(string.format("%s: %s, down %s, health %s/%s, map %s, nameplate %s", u,
+                UnitName(u) or "?", tostring(UnitDown(u)), Fmt(UnitHealth(u)), Fmt(UnitHealthMax(u)),
+                (px and not (px == 0 and py == 0)) and string.format("%.4f, %.4f", px, py) or "none",
+                plate and "found" or "none"))
         end
     end
     if n == 0 then Print("WoW party: none. Teammates must be in your party for SurvivorBeacon to see them.") end
@@ -409,7 +411,28 @@ function SB.Status()
         Print(string.format("revive line: down=%s share=%s by=%s reviving=%s rshare=%s",
             Fmt(r.down), Fmt(r.share), Fmt(r.by), Fmt(r.reviving), Fmt(r.rshare)))
     end
-    Print("friendly nameplates CVar: " .. Fmt(GetCVar("nameplateShowFriends")))
+    local on = SB.FriendPlatesOn and SB.FriendPlatesOn()
+    Print("friendly nameplates: " .. (on == nil and "unknown (no CVar)" or (on and "on" or "off")))
+    local rx, ry = GetPlayerMapPosition("player")
+    Print("raw map position: " .. Fmt(rx) .. ", " .. Fmt(ry))
+    -- Looking for any other place the game puts where we are.
+    local function Keys(label, t)
+        if type(t) ~= "table" then return end
+        local s = ""
+        for k, v in pairs(t) do
+            if type(v) ~= "table" then s = s .. " " .. tostring(k) .. "=" .. Fmt(v) end
+        end
+        Print(label .. ":" .. (s ~= "" and s or " empty"))
+    end
+    Keys("run line", AZS_RUN)
+    Keys("zone line", AZS_ZONE)
+    for _, l in ipairs({ { "lairs", AZS_LAIRS }, { "chests", AZS_CHESTS } }) do
+        local t = l[2]
+        if type(t) == "table" then
+            Print(l[1] .. ": " .. table.getn(t))
+            if t[1] then Keys("  first", t[1]) end
+        end
+    end
     local any = false
     for name, d in pairs(SB.downs) do
         any = true
