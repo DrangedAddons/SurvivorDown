@@ -26,6 +26,7 @@ Click the minimap button or type `/asb` to open the settings. Each part above ha
 - `/asb unlock` / `/asb lock`: move the list (or the Unlock list button in the settings)
 - `/asb test`: a pretend teammate down where you stand for 30 s, placed by a ping. Walk away to check it stays put. With a target, it uses the target's name, so the beam shows on the target's plate.
 - `/asb status`: what the addon can see: your party, positions, the zone's size, the game's revive line
+- `/asb debug`: show every down, ping and message in chat, to find where a position gets lost
 - `/asb reset`: settings back to defaults
 
 Settings are per character.

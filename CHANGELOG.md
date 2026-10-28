@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+- `/asb debug`: shows each step in chat. On the downed player's side: going down (and why), each ping and each message sent. On everyone else's: each minimap ping (with what the game reports) and each message heard.
+- A ping whose sender the game doesn't name is now taken as the downed teammate's, when exactly one teammate's SurvivorBeacon says they're down.
+- The list says which link is missing instead of "position unknown": "nothing from their addon" (no message from their SurvivorBeacon) or "no ping yet" (its message arrived, its ping didn't).
+
 ## 0.3.0
 - **Positions from minimap pings.** While you're down, SurvivorBeacon pings your own spot on the minimap every 3 s. The game keeps a ping fixed in the world and reports where it is from each teammate, so their list distance and minimap pin follow that spot as they move. This works in instances, which have no map coordinates. Map coordinates are still used where there's no ping.
 - With two people down at once only the latest ping can be read live; the other's distance updates each time they ping (every 3 s).

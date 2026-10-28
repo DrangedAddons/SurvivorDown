@@ -103,7 +103,9 @@ local function Locate(d)
     local east, north, yards = SB.Offset(d)
     if not east then
         if d.mx and d.zone and d.zone ~= (GetRealZoneText() or "") then return "in " .. d.zone end
-        return "position unknown"
+        -- Which link is missing: their SurvivorBeacon's message, or its ping.
+        if d.comm then return "no ping yet" end
+        return "nothing from their addon"
     end
     local dir = SB.Compass(east, north)
     if not yards then return dir, east, north, false end

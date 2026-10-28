@@ -274,10 +274,19 @@ local function SetSkull(unit, on)
     return false
 end
 
+-- /asb debug: every step of a down, a ping and a message, in chat. Not saved.
+SB.debug = false
+local function Debug(msg)
+    if SB.debug then Print("|cff88ccff[debug]|r " .. msg) end
+end
+
 local function Send(msg)
     if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 then
         local channel = GetNumRaidMembers() > 0 and "RAID" or "PARTY"
-        pcall(SendAddonMessage, PREFIX, msg, channel)
+        local ok, err = pcall(SendAddonMessage, PREFIX, msg, channel)
+        Debug("sent " .. msg .. " to " .. channel .. (ok and "" or (" - failed: " .. tostring(err))))
+    else
+        Debug("not in a party, so " .. msg .. " wasn't sent")
     end
 end
 
@@ -311,10 +320,19 @@ local function UpdateSelf(now)
         if not selfDown then
             selfDown, lastSent, lastPing = true, 0, 0
             if db.skull then markedSelf = SetSkull("player", true) and true or false end
+            local r = type(AZS_REVIVE) == "table" and AZS_REVIVE or {}
+            Debug(string.format("you're down: dead %s, health %s/%s, revive line down=%s",
+                tostring(UnitIsDeadOrGhost("player")), tostring(UnitHealth("player")),
+                tostring(UnitHealthMax("player")), tostring(r.down)))
         end
-        if now - lastPing >= PING_EVERY and Minimap.PingLocation then
+        if now - lastPing >= PING_EVERY then
             lastPing = now
-            pcall(Minimap.PingLocation, Minimap, 0, 0) -- our own spot, for the party
+            if Minimap.PingLocation then
+                local ok, err = pcall(Minimap.PingLocation, Minimap, 0, 0) -- our own spot, for the party
+                Debug("pinged your spot" .. (ok and "" or (" - failed: " .. tostring(err))))
+            else
+                Debug("can't ping: no Minimap:PingLocation")
+            end
         end
         if now - lastSent >= SEND_EVERY then
             lastSent = now
@@ -327,6 +345,7 @@ local function UpdateSelf(now)
         end
     elseif selfDown then
         selfDown = false
+        Debug("you're up")
         Send("UP")
         if markedSelf then SetSkull("player", false) end
         markedSelf = false
@@ -369,11 +388,33 @@ local function UpdateParty(now)
     end
 end
 
--- MINIMAP_PING: arg1 is the unit that pinged. Our own pings are ignored; Test sets its own.
-local function OnPing(unit)
-    if not unit or unit == "player" or not UnitExists(unit) then return end
-    local name = UnitName(unit)
-    if not name then return end
+-- MINIMAP_PING: in 1.12 arg1 is the unit that pinged; this client may give a name or nothing.
+-- Our own pings are ignored; Test sets its own.
+local function OnPing(who, a2, a3)
+    local px, py
+    if Minimap.GetPingPosition then px, py = Minimap:GetPingPosition() end
+    Debug(string.format("MINIMAP_PING arg1=%s arg2=%s arg3=%s, ping at %s, %s", tostring(who),
+        tostring(a2), tostring(a3), tostring(px), tostring(py)))
+    local name
+    if who and UnitExists(who) then
+        if UnitIsUnit(who, "player") then return end
+        name = UnitName(who)
+    elseif who and who ~= UnitName("player") and PartyUnit(who) then
+        name = who
+    end
+    if not name then
+        -- No usable sender: if exactly one teammate's SurvivorBeacon says they're down, it's theirs.
+        local only, count = nil, 0
+        for n, d in pairs(SB.downs) do
+            if d.comm then only, count = n, count + 1 end
+        end
+        if count == 1 then name = only end
+    end
+    if not name then
+        Debug("  couldn't tell whose ping that was")
+        return
+    end
+    Debug("  ping is " .. name .. "'s")
     SB.pinger = name
     pings[name] = GetTime()
 end
@@ -543,9 +584,12 @@ frame:SetScript("OnEvent", function()
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
         if SetMapToCurrentZone then SetMapToCurrentZone() end
     elseif event == "MINIMAP_PING" then
-        OnPing(arg1)
+        OnPing(arg1, arg2, arg3)
     elseif event == "CHAT_MSG_ADDON" then
-        if arg1 == PREFIX and db then OnAddonMessage(arg2 or "", arg4) end
+        if arg1 == PREFIX and db then
+            Debug("heard " .. tostring(arg2) .. " from " .. tostring(arg4) .. " on " .. tostring(arg3))
+            OnAddonMessage(arg2 or "", arg4)
+        end
     end
 end)
 
@@ -575,6 +619,9 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
     elseif cmd == "unlock" or cmd == "lock" then
         SB.Set("listLocked", cmd == "lock")
         Print(cmd == "lock" and "list locked." or "list unlocked: drag it by its title. /asb lock when done.")
+    elseif cmd == "debug" then
+        SB.debug = not SB.debug
+        Print("debug " .. (SB.debug and "on: downs, pings and messages show in chat." or "off."))
     elseif cmd == "reset" then
         SB.Reset()
         Print("settings back to defaults.")
@@ -592,6 +639,7 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
         Print("  /asb unlock | lock - move the list")
         Print("  /asb test - a pretend teammate down where you stand for 30 s")
         Print("  /asb status - what the addon can see: party, positions, zone size")
+        Print("  /asb debug - show every down, ping and message in chat")
         Print("  /asb reset - settings back to defaults")
     end
 end
