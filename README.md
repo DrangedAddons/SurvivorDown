@@ -16,9 +16,13 @@ The best position comes from the downed player's own SurvivorBeacon, which sends
 
 Distances need the zone's size in yards. SurvivorBeacon measures it from the run's guardian lairs and chests and remembers it per zone. Until then it uses the 1.12 map size for a few starting zones, or shows only a direction.
 
+## Settings
+Click the minimap button or type `/asb` to open the settings. Each part above has a tickbox there, and every change shows at once. **Test** and **Status** run `/asb test` and `/asb status`.
+
 ## Commands
-- `/asb`: list the commands and which parts are on
-- `/asb alert`, `sound`, `minimap`, `plate`, `friendplates`, `skull`, `list`: turn that part on or off
+- `/asb`: open or close the settings
+- `/asb help`: list the commands and which parts are on
+- `/asb alert`, `sound`, `minimap`, `plate`, `friendplates`, `skull`, `list`, `button`: turn that part on or off
 - `/asb unlock` / `/asb lock`: move the list
 - `/asb test`: a pretend teammate down 40 yd north-east of you for 20 s. With a target, it uses the target's name, so the beam shows on the target's plate.
 - `/asb status`: what the addon can see: your party, positions, the zone's size, the game's revive line

@@ -397,6 +397,8 @@ end
 -- Settings changed (or loaded).
 function SB.Refresh()
     PlaceList()
+    if SB.UpdateMinimapButton then SB.UpdateMinimapButton() end
+    if SB.RefreshOptions then SB.RefreshOptions() end
     if not SB.Get("listLocked") then
         -- Unlocked: show the list even when empty so there's something to drag.
         list:SetHeight(26 + ROW_H)

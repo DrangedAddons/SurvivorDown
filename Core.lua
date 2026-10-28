@@ -27,8 +27,11 @@ SB.defaults = {
     listLocked = true,
     listX = nil, -- saved list position (offset from the bottom-left); nil = default
     listY = nil,
+    -- Minimap button (Reset to defaults leaves these alone)
+    minimapButton = true,
+    minimapAngle = 200, -- degrees around the minimap, 0 = right
 }
-local KEEP_ON_RESET = { listX = true, listY = true }
+local KEEP_ON_RESET = { listX = true, listY = true, minimapButton = true, minimapAngle = true }
 
 -- Who's down, by name: { name, class, unit, mx, my, zone, since, src, comm, heard, test }.
 -- `src` says where mx/my came from ("addon", "party" or "test"); `comm` true once their own
@@ -68,6 +71,9 @@ function SB.Set(key, value)
     db[key] = value
     if SB.Refresh then SB.Refresh() end
 end
+
+-- Saves without a refresh, for values nothing else depends on.
+function SB.SetQuiet(key, value) db[key] = value end
 
 function SB.Reset()
     for k, v in pairs(SB.defaults) do
@@ -453,8 +459,9 @@ local TOGGLES = {
     friendplates = "turn friendly nameplates on while someone's down",
     skull = "skull icon on whoever is down",
     list = "list of who's down",
+    button = "minimap button",
 }
-local TOGGLE_KEY = { friendplates = "friendPlates" }
+local TOGGLE_KEY = { friendplates = "friendPlates", button = "minimapButton" }
 
 local frame = CreateFrame("Frame", "SurvivorBeaconFrame")
 frame:RegisterEvent("ADDON_LOADED")
@@ -491,7 +498,9 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
     local cmd = string.lower(msg or "")
     cmd = string.gsub(cmd, "^%s+", "")
     cmd = string.gsub(cmd, "%s+$", "")
-    if cmd == "test" then
+    if cmd == "" then
+        SB.ToggleOptions()
+    elseif cmd == "test" then
         SB.Test()
     elseif cmd == "status" then
         SB.Status()
@@ -507,6 +516,7 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
         Print(TOGGLES[cmd] .. ": " .. (db[key] and "on" or "off"))
     else
         Print("commands:")
+        Print("  /asb - open or close the settings")
         for k, text in pairs(TOGGLES) do
             local key = TOGGLE_KEY[k] or k
             Print(string.format("  /asb %s - %s (%s)", k, text, (db and db[key]) and "on" or "off"))
