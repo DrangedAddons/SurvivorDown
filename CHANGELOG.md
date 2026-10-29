@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0
+- First release. Skull over whoever is down, a call-out with sound, a list with each one's distance and an arrow pointing at them, and a minimap pin.
+- Removed the beam under a downed teammate's nameplate and the friendly-nameplate switch that went with it. A downed player has no nameplate here, so it never showed.
+- `/asb status` lists only what helps: party, positions, zone size, minimap ping, facing, revive line and who's down.
+
 ## 0.5.1
 - The arrow has its own column at the right of each row, sized so it stays clear of the frame's border at any angle.
 - Each row is its own band with a stripe in that teammate's class colour, a gap between rows and a highlight on mouse-over, so a full party's worth of rows stays readable.

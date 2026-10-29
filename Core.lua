@@ -1,8 +1,8 @@
 -- SurvivorBeacon: marks where a party member went down so the others can find and revive them.
 -- 1.12 has no call that turns a world position into a screen position, and the game gives
--- addons no world x/y/z for players, so the marker goes where the client does place things:
--- the minimap and the teammate's own nameplate. Beacon.lua draws those, plus a call-out and a
--- list with distance and direction.
+-- addons no world x/y/z for players. So in the world the marker is the skull raid icon, which
+-- the game draws over them itself; everything else is on the HUD. Beacon.lua draws a call-out,
+-- minimap pins, and a list with each one's distance and an arrow pointing at them.
 --
 -- Where someone went down comes from, best first:
 --   1. a minimap ping: their SurvivorBeacon pings their own spot every few seconds while
@@ -28,8 +28,6 @@ SB.defaults = {
     alert = true, -- big "<name> is down" call-out
     sound = true, -- raid warning sound with the call-out
     minimap = true, -- pin on the minimap where they went down
-    plate = true, -- beam over the downed teammate's nameplate
-    friendPlates = true, -- turn friendly nameplates on while someone's down, so there's a plate to mark
     skull = true, -- skull raid icon on whoever is down
     list = true, -- the list of who's down, how far and which way
     arrow = true, -- an arrow beside each list row pointing at them
@@ -72,6 +70,7 @@ local function LoadSettings()
     for k, v in pairs(SB.defaults) do
         if db[k] == nil then db[k] = v end
     end
+    db.plate, db.friendPlates = nil, nil -- the nameplate beam's settings, before 1.0.0
 end
 
 function SB.Get(key) return db and db[key] end
@@ -558,8 +557,7 @@ end
 
 -- A pretend teammate down where you stand, for 30 s, placed with a minimap ping the same way a
 -- real one is: walk away and the list and minimap pin should stay on that spot. With a target,
--- it takes the target's name, so the nameplate beam shows on the target's plate. The ping
--- shows on your party's minimaps too.
+-- it takes the target's name. The ping shows on your party's minimaps too.
 --
 -- With a count (up to 4 more, a full party of 5 being you and 4 down), the extra ones lie at
 -- fixed spots around the first, so the list fills up and each arrow points its own way.
@@ -626,11 +624,9 @@ function SB.Status()
         if UnitExists(u) then
             n = n + 1
             local px, py = GetPlayerMapPosition(u)
-            local plate = SB.FindPlate and SB.FindPlate(UnitName(u) or "")
-            Print(string.format("%s: %s, down %s, health %s/%s, map %s, nameplate %s", u,
+            Print(string.format("%s: %s, down %s, health %s/%s, map %s", u,
                 UnitName(u) or "?", tostring(UnitDown(u)), Fmt(UnitHealth(u)), Fmt(UnitHealthMax(u)),
-                (px and not (px == 0 and py == 0)) and string.format("%.4f, %.4f", px, py) or "none",
-                plate and "found" or "none"))
+                (px and not (px == 0 and py == 0)) and string.format("%.4f, %.4f", px, py) or "none"))
         end
     end
     if n == 0 then Print("WoW party: none. Teammates must be in your party for SurvivorBeacon to see them.") end
@@ -657,28 +653,6 @@ function SB.Status()
     Print(string.format("facing: %s (%s); minimap arrow model %s; tracking movement by %s",
         facing and string.format("%.0f deg", math.deg(facing)) or "unknown", Fmt(fsrc), model,
         Fmt(ref)))
-    local on = SB.FriendPlatesOn and SB.FriendPlatesOn()
-    Print("friendly nameplates: " .. (on == nil and "unknown (no CVar)" or (on and "on" or "off")))
-    local rx, ry = GetPlayerMapPosition("player")
-    Print("raw map position: " .. Fmt(rx) .. ", " .. Fmt(ry))
-    -- Looking for any other place the game puts where we are.
-    local function Keys(label, t)
-        if type(t) ~= "table" then return end
-        local s = ""
-        for k, v in pairs(t) do
-            if type(v) ~= "table" then s = s .. " " .. tostring(k) .. "=" .. Fmt(v) end
-        end
-        Print(label .. ":" .. (s ~= "" and s or " empty"))
-    end
-    Keys("run line", AZS_RUN)
-    Keys("zone line", AZS_ZONE)
-    for _, l in ipairs({ { "lairs", AZS_LAIRS }, { "chests", AZS_CHESTS } }) do
-        local t = l[2]
-        if type(t) == "table" then
-            Print(l[1] .. ": " .. table.getn(t))
-            if t[1] then Keys("  first", t[1]) end
-        end
-    end
     local any = false
     for name, d in pairs(SB.downs) do
         any = true
@@ -695,14 +669,12 @@ local TOGGLES = {
     alert = "call-out when someone goes down",
     sound = "sound with the call-out",
     minimap = "minimap pin",
-    plate = "beam over the nameplate",
-    friendplates = "turn friendly nameplates on while someone's down",
     skull = "skull icon on whoever is down",
     list = "list of who's down",
     arrow = "arrow beside the list pointing at each",
     button = "minimap button",
 }
-local TOGGLE_KEY = { friendplates = "friendPlates", button = "minimapButton" }
+local TOGGLE_KEY = { button = "minimapButton" }
 
 local frame = CreateFrame("Frame", "SurvivorBeaconFrame")
 frame:RegisterEvent("ADDON_LOADED")

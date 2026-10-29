@@ -1,5 +1,5 @@
--- What SurvivorBeacon draws: the call-out, the minimap pins, the beam over a downed teammate's
--- nameplate, and the list with an arrow per row. Core.lua decides who's down and where.
+-- What SurvivorBeacon draws: the call-out, the minimap pins, and the list with an arrow per
+-- row. Core.lua decides who's down and where.
 local SB = SurvivorBeacon
 
 local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
@@ -11,7 +11,6 @@ local ARROW = "Interface\\AddOns\\SurvivorBeacon\\Arrow"
 -- inside its 30 px column.
 local ARROW_SIZE = 34
 local FONT = "Fonts\\FRIZQT__.TTF"
-local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
 
 local function SkullTexture(tex)
     tex:SetTexture(SKULL)
@@ -154,85 +153,6 @@ local function PlacePin(p, east, north, yards)
 end
 
 ---------------------------------------------------------------------------------------------
--- Nameplate beam
-
-local beams = {} -- name -> beam
-
-local function GetBeam(name)
-    local b = beams[name]
-    if b then return b end
-    b = CreateFrame("Frame", nil, UIParent)
-    b:SetFrameStrata("BACKGROUND")
-    b:SetWidth(1)
-    b:SetHeight(1)
-    b.halo = b:CreateTexture(nil, "BACKGROUND")
-    b.halo:SetTexture(1, 0.2, 0.1, 0.18)
-    b.halo:SetWidth(22)
-    b.halo:SetHeight(BEAM_DROP + 34)
-    b.halo:SetPoint("TOP", b, "CENTER", 0, 34)
-    b.core = b:CreateTexture(nil, "BORDER")
-    b.core:SetTexture(1, 0.35, 0.2, 0.6)
-    b.core:SetWidth(5)
-    b.core:SetHeight(BEAM_DROP + 34)
-    b.core:SetPoint("TOP", b, "CENTER", 0, 34)
-    b.ring = b:CreateTexture(nil, "ARTWORK")
-    b.ring:SetTexture(GLOW)
-    b.ring:SetBlendMode("ADD")
-    b.ring:SetVertexColor(1, 0.15, 0.1)
-    b.ring:SetPoint("CENTER", b, "CENTER", 0, -BEAM_DROP)
-    b.skull = b:CreateTexture(nil, "OVERLAY")
-    SkullTexture(b.skull)
-    b.skull:SetWidth(36)
-    b.skull:SetHeight(36)
-    b.skull:SetPoint("BOTTOM", b, "CENTER", 0, 34)
-    b:Hide()
-    beams[name] = b
-    return b
-end
-
--- The shown nameplate whose name text is `name`.
-local function FindPlate(name)
-    local kids = { WorldFrame:GetChildren() }
-    for i = 1, table.getn(kids) do
-        local f = kids[i]
-        if f:IsShown() and f.GetRegions and not f:GetName() then
-            local regions = { f:GetRegions() }
-            for j = 1, table.getn(regions) do
-                local r = regions[j]
-                if r.GetObjectType and r:GetObjectType() == "FontString" and r:GetText() == name then
-                    return f
-                end
-            end
-        end
-    end
-end
-
-SB.FindPlate = FindPlate
-
--- The game has no nameplateShowFriends CVar (GetCVar errors), so there's no telling whether
--- friendly plates were already on. nil when unknown.
-local function FriendPlatesOn()
-    local ok, v = pcall(GetCVar, "nameplateShowFriends")
-    if ok then return v == "1" end
-end
-SB.FriendPlatesOn = FriendPlatesOn
-
--- Friendly nameplates are what the beam hangs on. Turned on while someone's down unless known
--- to be on already, and back off once nobody's down.
-local friendsOn = false
-local function FriendPlates(want)
-    if want and not friendsOn then
-        if not FriendPlatesOn() and ShowFriendNameplates then
-            pcall(ShowFriendNameplates)
-            friendsOn = true
-        end
-    elseif not want and friendsOn then
-        if HideFriendNameplates then pcall(HideFriendNameplates) end
-        friendsOn = false
-    end
-end
-
----------------------------------------------------------------------------------------------
 -- List
 
 local list = CreateFrame("Frame", "SurvivorBeaconList", UIParent)
@@ -371,7 +291,7 @@ local function RowInfo(d, r, info)
     return string.format("%d", math.sqrt(east * east + north * north))
 end
 
--- Per frame: pins, beams and arrows follow you, and pins and beams pulse.
+-- Per frame: pins and arrows follow you, and pins pulse.
 local driver = CreateFrame("Frame")
 driver:Hide()
 driver:SetScript("OnUpdate", function()
@@ -392,14 +312,6 @@ driver:SetScript("OnUpdate", function()
             p.glow:SetAlpha(1 - phase)
         end
     end
-    for _, b in pairs(beams) do
-        if b:IsShown() then
-            b.ring:SetWidth(50 + 70 * phase)
-            b.ring:SetHeight((50 + 70 * phase) * 0.4) -- flattened: a ring on the ground
-            b.ring:SetAlpha(1 - phase)
-            b.halo:SetAlpha(0.6 + 0.4 * (1 - phase))
-        end
-    end
 end)
 
 -- Every 0.2 s from Core.lua, and when someone goes down or comes up.
@@ -407,13 +319,11 @@ function SB.Tick()
     local downs = Sorted()
     local n = table.getn(downs)
     local live = {}
-    local anyReal = false
     local revive = type(AZS_REVIVE) == "table" and AZS_REVIVE or {}
 
     for i = 1, n do
         local d = downs[i]
         live[d.name] = true
-        if not d.test then anyReal = true end
         local info, east = Locate(d)
 
         local p = pins[d.name]
@@ -421,17 +331,6 @@ function SB.Tick()
             GetPin(d.name):Show()
         elseif p then
             p:Hide()
-        end
-
-        local b = beams[d.name]
-        local plate = SB.Get("plate") and FindPlate(d.name)
-        if plate then
-            b = GetBeam(d.name)
-            b:ClearAllPoints()
-            b:SetPoint("CENTER", plate, "CENTER", 0, 0)
-            b:Show()
-        elseif b then
-            b:Hide()
         end
 
         if SB.Get("list") then
@@ -457,9 +356,6 @@ function SB.Tick()
     for name, p in pairs(pins) do
         if not live[name] then p:Hide() end
     end
-    for name, b in pairs(beams) do
-        if not live[name] then b:Hide() end
-    end
     local shownRows = SB.Get("list") and n or 0
     for i = shownRows + 1, table.getn(rows) do rows[i]:Hide() end
     if shownRows > 0 then
@@ -469,7 +365,6 @@ function SB.Tick()
         list:Hide()
     end
 
-    FriendPlates(anyReal and SB.Get("plate") and SB.Get("friendPlates"))
     if n > 0 then driver:Show() else driver:Hide() end
 end
 
