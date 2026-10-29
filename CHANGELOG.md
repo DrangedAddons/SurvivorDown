@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1
+- The arrows are twice the size.
+
 ## 0.4.0
 - **Arrows:** each row of the list gets an arrow just outside its right edge, in the downed teammate's class colour, pointing at them. It hides once you're within 4 yd. `/asb arrow` or the new tickbox turns them off.
 - The game gives addons no facing, so the arrow takes it from the minimap's player arrow if this client lets an addon read it, and otherwise from the way you last moved. On movement it's right while you run forward, wrong while you strafe or backpedal, and holds while you stand still.

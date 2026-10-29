@@ -5,7 +5,8 @@ local SB = SurvivorBeacon
 local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
 local ARROW = "Interface\\Minimap\\MinimapArrow" -- points up
-local ARROW_SIZE = 24
+-- The arrow fills about half its texture, so this draws it about 24 px long.
+local ARROW_SIZE = 48
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
 
@@ -287,7 +288,7 @@ local function GetRow(i)
     r.arrow:SetTexture(ARROW)
     r.arrow:SetWidth(ARROW_SIZE)
     r.arrow:SetHeight(ARROW_SIZE)
-    r.arrow:SetPoint("LEFT", r, "RIGHT", 8, 0)
+    r.arrow:SetPoint("LEFT", r, "RIGHT", 0, 0)
     r.arrow:Hide()
     r:SetScript("OnClick", function()
         if this.unit and UnitExists(this.unit) then
