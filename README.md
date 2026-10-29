@@ -8,7 +8,7 @@ An [Azeroth Survivors](https://discord.gg/azerothsurvivors) addon. When someone 
 - **Beam:** a skull, a light beam and a pulsing ring on the ground under their nameplate. Friendly nameplates are turned on while someone's down (and off again after) so there's a plate to hang it on.
 - **Skull icon:** the skull raid icon on whoever is down.
 - **List:** who's down, how far and which way ("48 yd NE"). While you're reviving someone it shows how far along you are. Click a name to target them.
-- **Arrows:** beside each name in the list, an arrow in their class colour pointing at them. It hides once you're on top of them.
+- **Arrows:** at the end of each row of the list, a gold arrow pointing at them, with the distance in yards next to it. It hides once you're on top of them. With arrows off, or before the addon knows which way you face, the row says "25 yd NE" instead.
 
 The game has no way for an addon to draw at a spot in the world, so the beam needs the teammate's nameplate to be on screen. The minimap pin, the list and the arrows work at any distance.
 

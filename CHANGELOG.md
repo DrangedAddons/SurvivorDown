@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+- **New arrow:** gold with a black edge, so it stands out on any ground, and it turns about its own middle.
+- The arrow sits inside the list now, at the right end of each row. While it's showing, the row gives just the distance in yards ("25"), since the arrow shows the way. Without an arrow (arrows off, or no facing yet) the row still says "25 yd NE".
+- Rows are a little taller to fit the arrow.
+- The arrow is a new file, so restart the game after updating; `/reload` doesn't pick up new files.
+
 ## 0.4.1
 - The arrows are twice the size.
 

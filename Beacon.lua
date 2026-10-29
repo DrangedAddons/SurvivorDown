@@ -4,9 +4,10 @@ local SB = SurvivorBeacon
 
 local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
-local ARROW = "Interface\\Minimap\\MinimapArrow" -- points up
--- The arrow fills about half its texture, so this draws it about 24 px long.
-local ARROW_SIZE = 48
+-- Gold, black-edged, points up, and kept inside the circle it turns in. tools/make_arrow.py
+-- draws it.
+local ARROW = "Interface\\AddOns\\SurvivorBeacon\\Arrow"
+local ARROW_SIZE = 34 -- the arrow itself is about two thirds of that
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
 
@@ -263,7 +264,7 @@ list:SetScript("OnDragStop", function()
 end)
 
 local rows = {}
-local ROW_H = 18
+local ROW_H = 24
 
 local function GetRow(i)
     local r = rows[i]
@@ -282,13 +283,12 @@ local function GetRow(i)
     r.name:SetPoint("LEFT", r.icon, "RIGHT", 4, 0)
     r.info = r:CreateFontString(nil, "OVERLAY")
     r.info:SetFont(FONT, 12, "OUTLINE")
-    r.info:SetPoint("RIGHT", r, "RIGHT", 0, 0)
-    -- Just outside the list's right edge, level with the row.
+    -- At the row's right end; the distance moves left of it while arrows are on.
     r.arrow = r:CreateTexture(nil, "OVERLAY")
     r.arrow:SetTexture(ARROW)
     r.arrow:SetWidth(ARROW_SIZE)
     r.arrow:SetHeight(ARROW_SIZE)
-    r.arrow:SetPoint("LEFT", r, "RIGHT", 0, 0)
+    r.arrow:SetPoint("CENTER", r, "RIGHT", -ROW_H / 2, 0)
     r.arrow:Hide()
     r:SetScript("OnClick", function()
         if this.unit and UnitExists(this.unit) then
@@ -337,6 +337,16 @@ local function PointArrow(r)
     -- Same convention as facing: 0 = north, counter-clockwise.
     Rotate(r.arrow, math.atan2(-east, north) - facing)
     r.arrow:Show()
+end
+
+-- The row's text: just the yards while its arrow shows the way, else Locate's distance and
+-- compass direction (or why there's no position).
+local function RowInfo(d, r, info)
+    if not r.arrow:IsShown() then return info end
+    local east, north, yards = SB.Offset(d)
+    if not east then return info end
+    if not yards then return "" end
+    return string.format("%d", math.sqrt(east * east + north * north))
 end
 
 -- Per frame: pins, beams and arrows follow you, and pins and beams pulse.
@@ -408,12 +418,13 @@ function SB.Tick()
             local cr, cg, cb = ClassColor(d.class)
             r.name:SetText(d.name)
             r.name:SetTextColor(cr, cg, cb)
-            r.arrow:SetVertexColor(cr, cg, cb)
+            r.info:ClearAllPoints()
+            r.info:SetPoint("RIGHT", r, "RIGHT", SB.Get("arrow") and -(ROW_H + 4) or 0, 0)
             if revive.reviving == d.name and type(revive.rshare) == "number" then
                 r.info:SetText(string.format("reviving %d%%", revive.rshare * 100))
                 r.info:SetTextColor(0.3, 1, 0.3)
             else
-                r.info:SetText(info .. (d.test and " (test)" or ""))
+                r.info:SetText(RowInfo(d, r, info) .. (d.test and " (test)" or ""))
                 r.info:SetTextColor(1, 1, 1)
             end
             r:Show()
