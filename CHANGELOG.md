@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+- The arrow has its own column at the right of each row, sized so it stays clear of the frame's border at any angle.
+- Each row is its own band with a stripe in that teammate's class colour, a gap between rows and a highlight on mouse-over, so a full party's worth of rows stays readable.
+- `/asb test 2` to `/asb test 5`: that many pretend teammates down at once, the extra ones at fixed spots around the first, to check the list with a full party.
+
 ## 0.5.0
 - **New arrow:** gold with a black edge, so it stands out on any ground, and it turns about its own middle.
 - The arrow sits inside the list now, at the right end of each row. While it's showing, the row gives just the distance in yards ("25"), since the arrow shows the way. Without an arrow (arrows off, or no facing yet) the row still says "25 yd NE".

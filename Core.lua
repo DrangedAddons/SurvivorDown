@@ -309,6 +309,14 @@ end
 -- no zone size the result is only good for a direction (3:2 map, unit-less) and the third
 -- value is false. nil when either position is unknown or they're in another zone.
 function SB.Offset(d)
+    if d.testOf then
+        -- An extra pretend down from /asb test N: a fixed step from the first one.
+        local base = SB.downs[d.testOf]
+        local e, n, yards = nil, nil, nil
+        if base then e, n, yards = SB.Offset(base) end
+        if not e then return nil end
+        return e + d.testE, n + d.testN, yards
+    end
     local pinged = pings[d.name]
     if pinged and (d.test or GetTime() - pinged < PING_STALE) then
         if d.name == SB.pinger then
@@ -552,13 +560,21 @@ end
 -- real one is: walk away and the list and minimap pin should stay on that spot. With a target,
 -- it takes the target's name, so the nameplate beam shows on the target's plate. The ping
 -- shows on your party's minimaps too.
+--
+-- With a count (up to 4 more, a full party of 5 being you and 4 down), the extra ones lie at
+-- fixed spots around the first, so the list fills up and each arrow points its own way.
 local TEST_SECS = 30
-function SB.Test()
+local TEST_EXTRA = {
+    { "MAGE", 25, 0 }, { "PRIEST", 0, -30 }, { "ROGUE", -20, 20 }, { "HUNTER", 40, 40 },
+}
+function SB.Test(count)
     local name = UnitExists("target") and UnitName("target") or "Test Hero"
     local _, class = UnitClass("player")
     RemoveDown(name)
     local fields = { class = class, zone = GetRealZoneText(), src = "test", test = true,
         testEnds = GetTime() + TEST_SECS }
+    count = math.min(math.max(count or 1, 1), table.getn(TEST_EXTRA) + 1)
+    for i = 1, table.getn(TEST_EXTRA) do RemoveDown("Test Hero " .. (i + 1)) end
     local pinged = Minimap.PingLocation and pcall(Minimap.PingLocation, Minimap, 0, 0)
     if pinged then
         SB.pinger = name
@@ -571,8 +587,15 @@ function SB.Test()
         end
     end
     AddDown(name, fields)
-    Print("test: " .. name .. " down where you stand for " .. TEST_SECS
-        .. " s. Walk away and the list and minimap pin should stay on this spot.")
+    for i = 1, count - 1 do
+        local x = TEST_EXTRA[i]
+        -- `since` a hair apart so they list in this order.
+        AddDown("Test Hero " .. (i + 1), { class = x[1], src = "test", test = true,
+            testOf = name, testE = x[2], testN = x[3], since = GetTime() + i * 0.001,
+            testEnds = GetTime() + TEST_SECS })
+    end
+    Print("test: " .. name .. (count > 1 and (" and " .. (count - 1) .. " more") or "")
+        .. " down for " .. TEST_SECS .. " s. Walk away and the list and minimap pin should stay put.")
 end
 
 ---------------------------------------------------------------------------------------------
@@ -729,8 +752,9 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
     cmd = string.gsub(cmd, "%s+$", "")
     if cmd == "" then
         SB.ToggleOptions()
-    elseif cmd == "test" then
-        SB.Test()
+    elseif string.find(cmd, "^test") then
+        local _, _, count = string.find(cmd, "^test%s+(%d)$")
+        SB.Test(tonumber(count))
     elseif cmd == "status" then
         SB.Status()
     elseif cmd == "unlock" or cmd == "lock" then
@@ -754,7 +778,7 @@ SlashCmdList["SURVIVORBEACON"] = function(msg)
             Print(string.format("  /asb %s - %s (%s)", k, text, (db and db[key]) and "on" or "off"))
         end
         Print("  /asb unlock | lock - move the list")
-        Print("  /asb test - a pretend teammate down where you stand for 30 s")
+        Print("  /asb test [2-5] - a pretend teammate down where you stand for 30 s (or that many)")
         Print("  /asb status - what the addon can see: party, positions, zone size")
         Print("  /asb debug - show every down, ping and message in chat")
         Print("  /asb reset - settings back to defaults")

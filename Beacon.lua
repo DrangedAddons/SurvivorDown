@@ -7,7 +7,9 @@ local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
 -- Gold, black-edged, points up, and kept inside the circle it turns in. tools/make_arrow.py
 -- draws it.
 local ARROW = "Interface\\AddOns\\SurvivorBeacon\\Arrow"
-local ARROW_SIZE = 34 -- the arrow itself is about two thirds of that
+-- The arrow reaches 27/64 of this from the centre at any angle (about 14 px), which keeps it
+-- inside its 30 px column.
+local ARROW_SIZE = 34
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
 
@@ -264,31 +266,51 @@ list:SetScript("OnDragStop", function()
 end)
 
 local rows = {}
-local ROW_H = 24
+local ROW_H = 26
+local ROW_GAP = 3
+local LIST_PAD = 8 -- inside the border, left and right of the rows and below the last
+local LIST_TOP = 22 -- title height
+local ARROW_COL = 30 -- the arrow's column at the right of each row
+
+local function ListHeight(n)
+    return LIST_TOP + n * (ROW_H + ROW_GAP) - ROW_GAP + LIST_PAD
+end
 
 local function GetRow(i)
     local r = rows[i]
     if r then return r end
     r = CreateFrame("Button", nil, list)
     r:SetHeight(ROW_H)
-    r:SetPoint("TOPLEFT", list, "TOPLEFT", 6, -20 - (i - 1) * ROW_H)
-    r:SetPoint("TOPRIGHT", list, "TOPRIGHT", -6, -20 - (i - 1) * ROW_H)
+    local y = -LIST_TOP - (i - 1) * (ROW_H + ROW_GAP)
+    r:SetPoint("TOPLEFT", list, "TOPLEFT", LIST_PAD, y)
+    r:SetPoint("TOPRIGHT", list, "TOPRIGHT", -LIST_PAD, y)
+    -- Each row is its own band with a stripe in their class colour, so rows don't run together.
+    r.bg = r:CreateTexture(nil, "BACKGROUND")
+    r.bg:SetTexture(0.55, 0.1, 0.08, 0.35)
+    r.bg:SetAllPoints(r)
+    r.stripe = r:CreateTexture(nil, "BORDER")
+    r.stripe:SetTexture(1, 1, 1, 1)
+    r.stripe:SetWidth(3)
+    r.stripe:SetPoint("TOPLEFT", r, "TOPLEFT", 0, 0)
+    r.stripe:SetPoint("BOTTOMLEFT", r, "BOTTOMLEFT", 0, 0)
+    r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     r.icon = r:CreateTexture(nil, "ARTWORK")
     SkullTexture(r.icon)
-    r.icon:SetWidth(14)
-    r.icon:SetHeight(14)
-    r.icon:SetPoint("LEFT", r, "LEFT", 0, 0)
+    r.icon:SetWidth(16)
+    r.icon:SetHeight(16)
+    r.icon:SetPoint("LEFT", r, "LEFT", 7, 0)
     r.name = r:CreateFontString(nil, "OVERLAY")
-    r.name:SetFont(FONT, 12, "OUTLINE")
-    r.name:SetPoint("LEFT", r.icon, "RIGHT", 4, 0)
+    r.name:SetFont(FONT, 13, "OUTLINE")
+    r.name:SetPoint("LEFT", r.icon, "RIGHT", 5, 0)
     r.info = r:CreateFontString(nil, "OVERLAY")
-    r.info:SetFont(FONT, 12, "OUTLINE")
-    -- At the row's right end; the distance moves left of it while arrows are on.
+    r.info:SetFont(FONT, 13, "OUTLINE")
+    -- Centred in its own column at the row's right end, so it never reaches the border; the
+    -- distance moves left of the column while arrows are on.
     r.arrow = r:CreateTexture(nil, "OVERLAY")
     r.arrow:SetTexture(ARROW)
     r.arrow:SetWidth(ARROW_SIZE)
     r.arrow:SetHeight(ARROW_SIZE)
-    r.arrow:SetPoint("CENTER", r, "RIGHT", -ROW_H / 2, 0)
+    r.arrow:SetPoint("CENTER", r, "RIGHT", -ARROW_COL / 2, 0)
     r.arrow:Hide()
     r:SetScript("OnClick", function()
         if this.unit and UnitExists(this.unit) then
@@ -418,8 +440,9 @@ function SB.Tick()
             local cr, cg, cb = ClassColor(d.class)
             r.name:SetText(d.name)
             r.name:SetTextColor(cr, cg, cb)
+            r.stripe:SetVertexColor(cr, cg, cb)
             r.info:ClearAllPoints()
-            r.info:SetPoint("RIGHT", r, "RIGHT", SB.Get("arrow") and -(ROW_H + 4) or 0, 0)
+            r.info:SetPoint("RIGHT", r, "RIGHT", SB.Get("arrow") and -(ARROW_COL + 2) or -6, 0)
             if revive.reviving == d.name and type(revive.rshare) == "number" then
                 r.info:SetText(string.format("reviving %d%%", revive.rshare * 100))
                 r.info:SetTextColor(0.3, 1, 0.3)
@@ -440,7 +463,7 @@ function SB.Tick()
     local shownRows = SB.Get("list") and n or 0
     for i = shownRows + 1, table.getn(rows) do rows[i]:Hide() end
     if shownRows > 0 then
-        list:SetHeight(26 + shownRows * ROW_H)
+        list:SetHeight(ListHeight(shownRows))
         list:Show()
     elseif SB.Get("listLocked") then
         list:Hide()
@@ -457,7 +480,7 @@ function SB.Refresh()
     if SB.RefreshOptions then SB.RefreshOptions() end
     if not SB.Get("listLocked") then
         -- Unlocked: show the list even when empty so there's something to drag.
-        list:SetHeight(26 + ROW_H)
+        list:SetHeight(ListHeight(1))
         list:Show()
     end
     SB.Tick()
