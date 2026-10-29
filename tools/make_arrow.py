@@ -1,4 +1,4 @@
-# SurvivorBeacon's list arrow: gold navigation arrow pointing up, black outline, its bounding
+# SurvivorDown's list arrow: gold navigation arrow pointing up, black outline, its bounding
 # box centred on the image so it turns about its own middle.
 import sys
 sys.path.insert(0, '.')

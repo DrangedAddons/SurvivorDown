@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+- **Renamed to SurvivorDown**, since it's about who's down and getting to them. The command is now `/asd` (and `/survivordown`).
+- Settings start fresh: they're saved under the new name. Delete the old `SurvivorBeacon` folder from AddOns after installing.
+- Entries below are from when it was SurvivorBeacon, and use its old `/asb` command.
+
 ## 1.0.0
 - First release. Skull over whoever is down, a call-out with sound, a list with each one's distance and an arrow pointing at them, and a minimap pin.
 - Removed the beam under a downed teammate's nameplate and the friendly-nameplate switch that went with it. A downed player has no nameplate here, so it never showed.

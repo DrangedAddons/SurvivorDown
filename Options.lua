@@ -1,5 +1,5 @@
--- SurvivorBeacon settings window: /asb or the minimap button. Every change applies at once.
-local SB = SurvivorBeacon
+-- SurvivorDown settings window: /asd or the minimap button. Every change applies at once.
+local SD = SurvivorDown
 
 local frame
 local widgets = {}
@@ -38,8 +38,8 @@ local function Check(parent, key, label, x, y)
     local fs = Text(c, 11)
     fs:SetPoint("LEFT", c, "RIGHT", 2, 0)
     fs:SetText(label)
-    c:SetScript("OnClick", function() SB.Set(key, this:GetChecked() and true or false) end)
-    c.Refresh = function() c:SetChecked(SB.Get(key) and 1 or nil) end
+    c:SetScript("OnClick", function() SD.Set(key, this:GetChecked() and true or false) end)
+    c.Refresh = function() c:SetChecked(SD.Get(key) and 1 or nil) end
     table.insert(widgets, c)
     return c
 end
@@ -55,7 +55,7 @@ local function PlainButton(parent, text, width)
 end
 
 local function Build()
-    frame = CreateFrame("Frame", "SurvivorBeaconOptions", UIParent)
+    frame = CreateFrame("Frame", "SurvivorDownOptions", UIParent)
     frame:SetWidth(320)
     frame:SetHeight(386)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
@@ -74,14 +74,14 @@ local function Build()
     frame:SetScript("OnDragStart", function() this:StartMoving() end)
     frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     frame:Hide()
-    table.insert(UISpecialFrames, "SurvivorBeaconOptions") -- Escape closes it
+    table.insert(UISpecialFrames, "SurvivorDownOptions") -- Escape closes it
 
     local title = Text(frame, 18, 1, 0.82, 0)
     title:SetPoint("TOP", frame, "TOP", 0, -14)
-    title:SetText("SurvivorBeacon")
+    title:SetText("SurvivorDown")
     local version = Text(frame, 10, 0.6, 0.6, 0.6)
     version:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
-    version:SetText("v" .. SB.version)
+    version:SetText("v" .. SD.version)
 
     local L = 20
     Heading(frame, "When a teammate goes down", L, -44)
@@ -93,9 +93,9 @@ local function Build()
     Check(frame, "arrow", "Arrow in the list pointing at each", L, -186)
     local unlock = PlainButton(frame, "Unlock list", 120)
     unlock:SetPoint("TOPLEFT", frame, "TOPLEFT", L, -214)
-    unlock:SetScript("OnClick", function() SB.Set("listLocked", not SB.Get("listLocked")) end)
+    unlock:SetScript("OnClick", function() SD.Set("listLocked", not SD.Get("listLocked")) end)
     unlock.Refresh = function()
-        unlock:SetText(SB.Get("listLocked") and "Unlock list" or "Lock list")
+        unlock:SetText(SD.Get("listLocked") and "Unlock list" or "Lock list")
     end
     table.insert(widgets, unlock)
     local unlockHint = Text(frame, 10, 0.6, 0.6, 0.6)
@@ -107,10 +107,10 @@ local function Build()
 
     local test = PlainButton(frame, "Test", 90)
     test:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 16, 16)
-    test:SetScript("OnClick", function() SB.Test() end)
+    test:SetScript("OnClick", function() SD.Test() end)
     local status = PlainButton(frame, "Status", 90)
     status:SetPoint("LEFT", test, "RIGHT", 6, 0)
-    status:SetScript("OnClick", function() SB.Status() end)
+    status:SetScript("OnClick", function() SD.Status() end)
     local close = PlainButton(frame, "Close", 90)
     close:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 16)
     close:SetScript("OnClick", function() frame:Hide() end)
@@ -121,17 +121,17 @@ local function Build()
     hint:SetWidth(290)
 end
 
-function SB.RefreshOptions()
+function SD.RefreshOptions()
     if not frame or not frame:IsShown() then return end
     for i = 1, table.getn(widgets) do widgets[i].Refresh() end
 end
 
-function SB.ToggleOptions()
+function SD.ToggleOptions()
     if not frame then Build() end
     if frame:IsShown() then
         frame:Hide()
     else
         frame:Show()
-        SB.RefreshOptions()
+        SD.RefreshOptions()
     end
 end

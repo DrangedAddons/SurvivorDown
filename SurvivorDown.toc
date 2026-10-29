@@ -1,11 +1,11 @@
 ## Interface: 11200
-## Title: SurvivorBeacon
+## Title: SurvivorDown
 ## Notes: Skulls a downed party member, calls it out, and points an arrow at them so you can find and revive them.
 ## Author: Dranged
-## Version: 1.0.0
-## SavedVariables: SurvivorBeaconDB
+## Version: 1.1.0
+## SavedVariables: SurvivorDownDB
 
 Core.lua
-Beacon.lua
+Display.lua
 Options.lua
 Minimap.lua

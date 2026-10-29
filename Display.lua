@@ -1,12 +1,12 @@
--- What SurvivorBeacon draws: the call-out, the minimap pins, and the list with an arrow per
+-- What SurvivorDown draws: the call-out, the minimap pins, and the list with an arrow per
 -- row. Core.lua decides who's down and where.
-local SB = SurvivorBeacon
+local SD = SurvivorDown
 
 local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
 -- Gold, black-edged, points up, and kept inside the circle it turns in. tools/make_arrow.py
 -- draws it.
-local ARROW = "Interface\\AddOns\\SurvivorBeacon\\Arrow"
+local ARROW = "Interface\\AddOns\\SurvivorDown\\Arrow"
 -- The arrow reaches 27/64 of this from the centre at any angle (about 14 px), which keeps it
 -- inside its 30 px column.
 local ARROW_SIZE = 34
@@ -72,18 +72,18 @@ local function ShowAlert(text, r, g, b, hold)
     alert:Show()
 end
 
-function SB.OnDown(d)
-    if SB.Get("alert") then
+function SD.OnDown(d)
+    if SD.Get("alert") then
         local r, g, b = ClassColor(d.class)
         ShowAlert(d.name .. " is down!", r, g, b, 3)
     end
-    if SB.Get("sound") then PlaySound("RaidWarning") end
-    SB.Tick()
+    if SD.Get("sound") then PlaySound("RaidWarning") end
+    SD.Tick()
 end
 
-function SB.OnUp(d)
-    if SB.Get("alert") then ShowAlert(d.name .. " is back up", 0.3, 1, 0.3, 1.5) end
-    SB.Tick()
+function SD.OnUp(d)
+    if SD.Get("alert") then ShowAlert(d.name .. " is back up", 0.3, 1, 0.3, 1.5) end
+    SD.Tick()
 end
 
 ---------------------------------------------------------------------------------------------
@@ -120,14 +120,14 @@ end
 
 -- Distance text and minimap spot for a down; nil spot when there's no position to use.
 local function Locate(d)
-    local east, north, yards = SB.Offset(d)
+    local east, north, yards = SD.Offset(d)
     if not east then
         if d.mx and d.zone and d.zone ~= (GetRealZoneText() or "") then return "in " .. d.zone end
-        -- Which link is missing: their SurvivorBeacon's message, or its ping.
+        -- Which link is missing: their SurvivorDown's message, or its ping.
         if d.comm then return "no ping yet" end
         return "nothing from their addon"
     end
-    local dir = SB.Compass(east, north)
+    local dir = SD.Compass(east, north)
     if not yards then return dir, east, north, false end
     local dist = math.sqrt(east * east + north * north)
     if dist < 4 then return "here", east, north, true end
@@ -138,7 +138,7 @@ local function PlacePin(p, east, north, yards)
     local radius = (Minimap:GetWidth() or 140) / 2
     local px, py
     if yards then
-        local scale = radius / SB.MinimapRadiusYards()
+        local scale = radius / SD.MinimapRadiusYards()
         px, py = east * scale, north * scale
     else
         px, py = east * 1e6, north * 1e6 -- direction only: always on the rim
@@ -155,7 +155,7 @@ end
 ---------------------------------------------------------------------------------------------
 -- List
 
-local list = CreateFrame("Frame", "SurvivorBeaconList", UIParent)
+local list = CreateFrame("Frame", "SurvivorDownList", UIParent)
 list:SetWidth(230)
 list:SetHeight(30)
 list:SetFrameStrata("MEDIUM")
@@ -177,12 +177,12 @@ list.title:SetTextColor(1, 0.35, 0.3)
 list.title:SetText("Down")
 list:RegisterForDrag("LeftButton")
 list:SetScript("OnDragStart", function()
-    if not SB.Get("listLocked") then this:StartMoving() end
+    if not SD.Get("listLocked") then this:StartMoving() end
 end)
 list:SetScript("OnDragStop", function()
     this:StopMovingOrSizing()
-    SB.Set("listX", this:GetLeft())
-    SB.Set("listY", this:GetTop())
+    SD.Set("listX", this:GetLeft())
+    SD.Set("listY", this:GetTop())
 end)
 
 local rows = {}
@@ -245,13 +245,13 @@ end
 
 local function PlaceList()
     list:ClearAllPoints()
-    local x, y = SB.Get("listX"), SB.Get("listY")
+    local x, y = SD.Get("listX"), SD.Get("listY")
     if x and y then
         list:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x, y)
     else
         list:SetPoint("TOP", UIParent, "CENTER", 0, -120)
     end
-    list:EnableMouse(not SB.Get("listLocked"))
+    list:EnableMouse(not SD.Get("listLocked"))
 end
 
 ---------------------------------------------------------------------------------------------
@@ -260,7 +260,7 @@ end
 -- Downs in the order they went down.
 local function Sorted()
     local out = {}
-    for _, d in pairs(SB.downs) do table.insert(out, d) end
+    for _, d in pairs(SD.downs) do table.insert(out, d) end
     table.sort(out, function(a, b) return a.since < b.since end)
     return out
 end
@@ -268,10 +268,10 @@ end
 -- The row's arrow, turned toward its down. Hidden with no direction, no facing, or once
 -- you're on top of them.
 local function PointArrow(r)
-    local d = r.down and SB.downs[r.down]
+    local d = r.down and SD.downs[r.down]
     local east, north
-    if d and SB.Get("arrow") then east, north = SB.Offset(d) end
-    local facing = east and SB.Facing()
+    if d and SD.Get("arrow") then east, north = SD.Offset(d) end
+    local facing = east and SD.Facing()
     if not facing or east * east + north * north < 16 then
         r.arrow:Hide()
         return
@@ -285,7 +285,7 @@ end
 -- compass direction (or why there's no position).
 local function RowInfo(d, r, info)
     if not r.arrow:IsShown() then return info end
-    local east, north, yards = SB.Offset(d)
+    local east, north, yards = SD.Offset(d)
     if not east then return info end
     if not yards then return "" end
     return string.format("%d", math.sqrt(east * east + north * north))
@@ -301,7 +301,7 @@ driver:SetScript("OnUpdate", function()
     local phase = Pulse(1)
     for name, p in pairs(pins) do
         if p:IsShown() then
-            local d = SB.downs[name]
+            local d = SD.downs[name]
             if d then
                 local info, east, north, yards = Locate(d)
                 p.info = info
@@ -315,7 +315,7 @@ driver:SetScript("OnUpdate", function()
 end)
 
 -- Every 0.2 s from Core.lua, and when someone goes down or comes up.
-function SB.Tick()
+function SD.Tick()
     local downs = Sorted()
     local n = table.getn(downs)
     local live = {}
@@ -327,13 +327,13 @@ function SB.Tick()
         local info, east = Locate(d)
 
         local p = pins[d.name]
-        if SB.Get("minimap") and east then
+        if SD.Get("minimap") and east then
             GetPin(d.name):Show()
         elseif p then
             p:Hide()
         end
 
-        if SB.Get("list") then
+        if SD.Get("list") then
             local r = GetRow(i)
             r.down, r.unit = d.name, d.unit
             local cr, cg, cb = ClassColor(d.class)
@@ -341,7 +341,7 @@ function SB.Tick()
             r.name:SetTextColor(cr, cg, cb)
             r.stripe:SetVertexColor(cr, cg, cb)
             r.info:ClearAllPoints()
-            r.info:SetPoint("RIGHT", r, "RIGHT", SB.Get("arrow") and -(ARROW_COL + 2) or -6, 0)
+            r.info:SetPoint("RIGHT", r, "RIGHT", SD.Get("arrow") and -(ARROW_COL + 2) or -6, 0)
             if revive.reviving == d.name and type(revive.rshare) == "number" then
                 r.info:SetText(string.format("reviving %d%%", revive.rshare * 100))
                 r.info:SetTextColor(0.3, 1, 0.3)
@@ -356,12 +356,12 @@ function SB.Tick()
     for name, p in pairs(pins) do
         if not live[name] then p:Hide() end
     end
-    local shownRows = SB.Get("list") and n or 0
+    local shownRows = SD.Get("list") and n or 0
     for i = shownRows + 1, table.getn(rows) do rows[i]:Hide() end
     if shownRows > 0 then
         list:SetHeight(ListHeight(shownRows))
         list:Show()
-    elseif SB.Get("listLocked") then
+    elseif SD.Get("listLocked") then
         list:Hide()
     end
 
@@ -369,14 +369,14 @@ function SB.Tick()
 end
 
 -- Settings changed (or loaded).
-function SB.Refresh()
+function SD.Refresh()
     PlaceList()
-    if SB.UpdateMinimapButton then SB.UpdateMinimapButton() end
-    if SB.RefreshOptions then SB.RefreshOptions() end
-    if not SB.Get("listLocked") then
+    if SD.UpdateMinimapButton then SD.UpdateMinimapButton() end
+    if SD.RefreshOptions then SD.RefreshOptions() end
+    if not SD.Get("listLocked") then
         -- Unlocked: show the list even when empty so there's something to drag.
         list:SetHeight(ListHeight(1))
         list:Show()
     end
-    SB.Tick()
+    SD.Tick()
 end

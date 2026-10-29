@@ -1,21 +1,21 @@
--- SurvivorBeacon: marks where a party member went down so the others can find and revive them.
+-- SurvivorDown: marks where a party member went down so the others can find and revive them.
 -- 1.12 has no call that turns a world position into a screen position, and the game gives
 -- addons no world x/y/z for players. So in the world the marker is the skull raid icon, which
--- the game draws over them itself; everything else is on the HUD. Beacon.lua draws a call-out,
+-- the game draws over them itself; everything else is on the HUD. Display.lua draws a call-out,
 -- minimap pins, and a list with each one's distance and an arrow pointing at them.
 --
 -- Where someone went down comes from, best first:
---   1. a minimap ping: their SurvivorBeacon pings their own spot every few seconds while
+--   1. a minimap ping: their SurvivorDown pings their own spot every few seconds while
 --      they're down. The client keeps a ping fixed in the world and Minimap:GetPingPosition
 --      gives it relative to you, so it needs no map coordinates (instances have none);
---   2. map coordinates their SurvivorBeacon sends to the party while it's down;
+--   2. map coordinates their SurvivorDown sends to the party while it's down;
 --   3. GetPlayerMapPosition on their party unit, if the game fills it in for party members.
 
-SurvivorBeacon = {}
-local SB = SurvivorBeacon
-SB.version = GetAddOnMetadata and GetAddOnMetadata("SurvivorBeacon", "Version") or "?"
+SurvivorDown = {}
+local SD = SurvivorDown
+SD.version = GetAddOnMetadata and GetAddOnMetadata("SurvivorDown", "Version") or "?"
 
-local PREFIX = "SBEACON"
+local PREFIX = "SDOWN"
 local SEND_EVERY = 2 -- s between our own DOWN messages while we're down
 local COMM_TIMEOUT = 8 -- s without a DOWN message before a teammate's own report counts as stale
 local NO_ADDON_WAIT = 3 -- s after a teammate goes down before we skull them ourselves
@@ -24,7 +24,7 @@ local PING_STALE = 10 -- s after a down's last ping before it no longer counts
 -- 1.12 outdoor minimap radius in yards for each zoom level.
 local MINIMAP_YARDS = { 233.33, 200, 166.67, 133.33, 100, 66.67 }
 
-SB.defaults = {
+SD.defaults = {
     alert = true, -- big "<name> is down" call-out
     sound = true, -- raid warning sound with the call-out
     minimap = true, -- pin on the minimap where they went down
@@ -42,8 +42,8 @@ local KEEP_ON_RESET = { listX = true, listY = true, minimapButton = true, minima
 
 -- Who's down, by name: { name, class, unit, mx, my, zone, since, src, comm, heard, test }.
 -- `src` says where mx/my came from ("addon", "party" or "test"); `comm` true once their own
--- SurvivorBeacon has reported, `heard` when it last did.
-SB.downs = {}
+-- SurvivorDown has reported, `heard` when it last did.
+SD.downs = {}
 
 local db
 local selfDown, lastSent, lastPing = false, 0, 0
@@ -51,9 +51,9 @@ local markedSelf = false
 local marked = {} -- name -> true for teammates we put the skull on
 
 local function Print(msg)
-    DEFAULT_CHAT_FRAME:AddMessage("|cffff5050SurvivorBeacon:|r " .. msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff5050SurvivorDown:|r " .. msg)
 end
-SB.Print = Print
+SD.Print = Print
 
 local function CharKey()
     local realm = GetRealmName and GetRealmName() or GetCVar("realmName") or "?"
@@ -61,33 +61,33 @@ local function CharKey()
 end
 
 local function LoadSettings()
-    SurvivorBeaconDB = SurvivorBeaconDB or {}
-    SurvivorBeaconDB.chars = SurvivorBeaconDB.chars or {}
-    SurvivorBeaconDB.zones = SurvivorBeaconDB.zones or {}
+    SurvivorDownDB = SurvivorDownDB or {}
+    SurvivorDownDB.chars = SurvivorDownDB.chars or {}
+    SurvivorDownDB.zones = SurvivorDownDB.zones or {}
     local key = CharKey()
-    SurvivorBeaconDB.chars[key] = SurvivorBeaconDB.chars[key] or {}
-    db = SurvivorBeaconDB.chars[key]
-    for k, v in pairs(SB.defaults) do
+    SurvivorDownDB.chars[key] = SurvivorDownDB.chars[key] or {}
+    db = SurvivorDownDB.chars[key]
+    for k, v in pairs(SD.defaults) do
         if db[k] == nil then db[k] = v end
     end
     db.plate, db.friendPlates = nil, nil -- the nameplate beam's settings, before 1.0.0
 end
 
-function SB.Get(key) return db and db[key] end
+function SD.Get(key) return db and db[key] end
 
-function SB.Set(key, value)
+function SD.Set(key, value)
     db[key] = value
-    if SB.Refresh then SB.Refresh() end
+    if SD.Refresh then SD.Refresh() end
 end
 
 -- Saves without a refresh, for values nothing else depends on.
-function SB.SetQuiet(key, value) db[key] = value end
+function SD.SetQuiet(key, value) db[key] = value end
 
-function SB.Reset()
-    for k, v in pairs(SB.defaults) do
+function SD.Reset()
+    for k, v in pairs(SD.defaults) do
         if not KEEP_ON_RESET[k] then db[k] = v end
     end
-    if SB.Refresh then SB.Refresh() end
+    if SD.Refresh then SD.Refresh() end
 end
 
 ---------------------------------------------------------------------------------------------
@@ -156,22 +156,22 @@ local measuredZone, measuredAt = nil, 0
 
 -- The current zone's size in yards and where it came from ("measured", "saved", "table"),
 -- or nil.
-function SB.ZoneSize()
+function SD.ZoneSize()
     local zone = GetRealZoneText and GetRealZoneText() or ""
     local now = GetTime()
     if measuredZone ~= zone or now - measuredAt > 10 then
         measuredZone, measuredAt = zone, now
         local w, h = Measure()
-        if w and zone ~= "" then SurvivorBeaconDB.zones[zone] = { w, h } end
+        if w and zone ~= "" then SurvivorDownDB.zones[zone] = { w, h } end
     end
-    local saved = SurvivorBeaconDB and SurvivorBeaconDB.zones[zone]
+    local saved = SurvivorDownDB and SurvivorDownDB.zones[zone]
     if saved then return saved[1], saved[2], "measured" end
     local known = ZONE_YARDS[zone]
     if known then return known[1], known[2], "table" end
     return nil
 end
 
-function SB.PlayerPos()
+function SD.PlayerPos()
     local x, y = GetPlayerMapPosition("player")
     if (not x or (x == 0 and y == 0)) and SetMapToCurrentZone then
         SetMapToCurrentZone()
@@ -181,14 +181,14 @@ function SB.PlayerPos()
     return x, y
 end
 
-function SB.MinimapRadiusYards()
+function SD.MinimapRadiusYards()
     return MINIMAP_YARDS[(Minimap.GetZoom and Minimap:GetZoom() or 0) + 1] or MINIMAP_YARDS[1]
 end
 
--- name -> GetTime() of their last minimap ping. SB.pinger is whoever pinged last: the client
+-- name -> GetTime() of their last minimap ping. SD.pinger is whoever pinged last: the client
 -- keeps only one ping, so only theirs can be read live.
 local pings = {}
-SB.pinger = nil
+SD.pinger = nil
 
 -- The current ping in yards east and north of you. 1.12 gives GetPingPosition as a fraction of
 -- the minimap's width; values far past that are taken as pixels, in case this client differs.
@@ -200,10 +200,10 @@ local function PingYards()
         local width = Minimap:GetWidth() or 140
         x, y = x / width, y / width
     end
-    local diameter = 2 * SB.MinimapRadiusYards()
+    local diameter = 2 * SD.MinimapRadiusYards()
     return x * diameter, y * diameter
 end
-SB.PingYards = PingYards
+SD.PingYards = PingYards
 
 ---------------------------------------------------------------------------------------------
 -- Where you've walked and which way you face, for the list's arrows
@@ -217,11 +217,11 @@ local walkRef, refE, refN -- what the last sample came from ("map" or a pinger's
 local headE, headN = 0, 0 -- walk position at the last heading update
 local HEADING_STEP = 1.5 -- yd you have to move before the heading updates
 local MAP_JUMP = 30 -- yd in one frame on the map means a zone change or a teleport, not a step
-SB.heading = nil -- radians, 0 = north, counter-clockwise: which way you last moved
+SD.heading = nil -- radians, 0 = north, counter-clockwise: which way you last moved
 
 local function PingRef()
-    local name = SB.pinger
-    local d = name and SB.downs[name]
+    local name = SD.pinger
+    local d = name and SD.downs[name]
     if not d or not pings[name] then return nil end
     if not d.test and GetTime() - pings[name] >= PING_STALE then return nil end
     local e, n = PingYards()
@@ -231,9 +231,9 @@ end
 -- Every frame while someone's down.
 local function TrackWalk()
     local ref, e, n
-    -- Not SB.PlayerPos: that calls SetMapToCurrentZone, too much for every frame.
+    -- Not SD.PlayerPos: that calls SetMapToCurrentZone, too much for every frame.
     local x, y = GetPlayerMapPosition("player")
-    local w, h = SB.ZoneSize()
+    local w, h = SD.ZoneSize()
     if x and not (x == 0 and y == 0) and w then
         ref, e, n = "map", x * w, -y * h
     else
@@ -257,7 +257,7 @@ local function TrackWalk()
     walkRef, refE, refN = ref, e, n
     local mE, mN = walkE - headE, walkN - headN
     if mE * mE + mN * mN >= HEADING_STEP * HEADING_STEP then
-        SB.heading = math.atan2(-mE, mN)
+        SD.heading = math.atan2(-mE, mN)
         headE, headN = walkE, walkN
     end
 end
@@ -284,7 +284,7 @@ end
 
 -- Which way you face: radians, 0 = north, counter-clockwise, and where that came from. nil
 -- until there's a source.
-function SB.Facing()
+function SD.Facing()
     local m = ArrowModel()
     if m then
         local ok, f = pcall(m.GetFacing, m)
@@ -297,28 +297,28 @@ function SB.Facing()
             if modelLive then return f, "minimap arrow" end
         end
     end
-    if SB.heading then return SB.heading, "movement" end
+    if SD.heading then return SD.heading, "movement" end
 end
 
-function SB.FacingInfo()
+function SD.FacingInfo()
     return ArrowModel() and (modelLive and "live" or "found, not turning yet") or "none", walkRef
 end
 
 -- Where a down is from here: yards east, yards north, and true if those are real yards. With
 -- no zone size the result is only good for a direction (3:2 map, unit-less) and the third
 -- value is false. nil when either position is unknown or they're in another zone.
-function SB.Offset(d)
+function SD.Offset(d)
     if d.testOf then
-        -- An extra pretend down from /asb test N: a fixed step from the first one.
-        local base = SB.downs[d.testOf]
+        -- An extra pretend down from /asd test N: a fixed step from the first one.
+        local base = SD.downs[d.testOf]
         local e, n, yards = nil, nil, nil
-        if base then e, n, yards = SB.Offset(base) end
+        if base then e, n, yards = SD.Offset(base) end
         if not e then return nil end
         return e + d.testE, n + d.testN, yards
     end
     local pinged = pings[d.name]
     if pinged and (d.test or GetTime() - pinged < PING_STALE) then
-        if d.name == SB.pinger then
+        if d.name == SD.pinger then
             -- Theirs is the last ping, so it can be read live.
             local e, n = PingYards()
             if e then
@@ -333,16 +333,16 @@ function SB.Offset(d)
     end
     if not d.mx then return nil end
     if d.zone and d.zone ~= "" and d.zone ~= (GetRealZoneText() or "") then return nil end
-    local px, py = SB.PlayerPos()
+    local px, py = SD.PlayerPos()
     if not px then return nil end
     local dx, dy = d.mx - px, d.my - py
-    local w, h = SB.ZoneSize()
+    local w, h = SD.ZoneSize()
     if w then return dx * w, -dy * h, true end
     return dx * 1.5, -dy, false
 end
 
 local COMPASS = { "E", "NE", "N", "NW", "W", "SW", "S", "SE" }
-function SB.Compass(east, north)
+function SD.Compass(east, north)
     local deg = math.deg(math.atan2(north, east))
     local i = math.mod(math.floor((deg + 22.5) / 45) + 8, 8) + 1
     return COMPASS[i]
@@ -387,10 +387,10 @@ local function SetSkull(unit, on)
     return false
 end
 
--- /asb debug: every step of a down, a ping and a message, in chat. Not saved.
-SB.debug = false
+-- /asd debug: every step of a down, a ping and a message, in chat. Not saved.
+SD.debug = false
 local function Debug(msg)
-    if SB.debug then Print("|cff88ccff[debug]|r " .. msg) end
+    if SD.debug then Print("|cff88ccff[debug]|r " .. msg) end
 end
 
 local function Send(msg)
@@ -404,27 +404,27 @@ local function Send(msg)
 end
 
 local function AddDown(name, fields)
-    local d = SB.downs[name]
+    local d = SD.downs[name]
     local fresh = not d
     if fresh then
         d = { name = name, since = GetTime() }
-        SB.downs[name] = d
+        SD.downs[name] = d
     end
     for k, v in pairs(fields) do d[k] = v end
-    if fresh and SB.OnDown then SB.OnDown(d) end
+    if fresh and SD.OnDown then SD.OnDown(d) end
     return d
 end
 
 local function RemoveDown(name)
-    local d = SB.downs[name]
+    local d = SD.downs[name]
     if not d then return end
-    SB.downs[name] = nil
+    SD.downs[name] = nil
     if marked[name] then
         local u = PartyUnit(name)
         if u then SetSkull(u, false) end
         marked[name] = nil
     end
-    if SB.OnUp and not d.test then SB.OnUp(d) end
+    if SD.OnUp and not d.test then SD.OnUp(d) end
 end
 
 local function UpdateSelf(now)
@@ -449,7 +449,7 @@ local function UpdateSelf(now)
         end
         if now - lastSent >= SEND_EVERY then
             lastSent = now
-            local x, y = SB.PlayerPos()
+            local x, y = SD.PlayerPos()
             if x then
                 Send(string.format("DOWN:%.5f:%.5f:%s", x, y, GetRealZoneText() or ""))
             else
@@ -472,7 +472,7 @@ local function UpdateParty(now)
         if UnitExists(u) then
             local name = UnitName(u)
             seen[name] = true
-            local d = SB.downs[name]
+            local d = SD.downs[name]
             if UnitDown(u) then
                 local _, class = UnitClass(u)
                 d = AddDown(name, { unit = u, class = class })
@@ -492,7 +492,7 @@ local function UpdateParty(now)
             end
         end
     end
-    for name, d in pairs(SB.downs) do
+    for name, d in pairs(SD.downs) do
         if d.test then
             if now > d.testEnds then RemoveDown(name) end
         elseif not seen[name] and (not d.comm or now - (d.heard or 0) > COMM_TIMEOUT) then
@@ -516,9 +516,9 @@ local function OnPing(who, a2, a3)
         name = who
     end
     if not name then
-        -- No usable sender: if exactly one teammate's SurvivorBeacon says they're down, it's theirs.
+        -- No usable sender: if exactly one teammate's SurvivorDown says they're down, it's theirs.
         local only, count = nil, 0
-        for n, d in pairs(SB.downs) do
+        for n, d in pairs(SD.downs) do
             if d.comm then only, count = n, count + 1 end
         end
         if count == 1 then name = only end
@@ -528,7 +528,7 @@ local function OnPing(who, a2, a3)
         return
     end
     Debug("  ping is " .. name .. "'s")
-    SB.pinger = name
+    SD.pinger = name
     pings[name] = GetTime()
 end
 
@@ -565,7 +565,7 @@ local TEST_SECS = 30
 local TEST_EXTRA = {
     { "MAGE", 25, 0 }, { "PRIEST", 0, -30 }, { "ROGUE", -20, 20 }, { "HUNTER", 40, 40 },
 }
-function SB.Test(count)
+function SD.Test(count)
     local name = UnitExists("target") and UnitName("target") or "Test Hero"
     local _, class = UnitClass("player")
     RemoveDown(name)
@@ -575,10 +575,10 @@ function SB.Test(count)
     for i = 1, table.getn(TEST_EXTRA) do RemoveDown("Test Hero " .. (i + 1)) end
     local pinged = Minimap.PingLocation and pcall(Minimap.PingLocation, Minimap, 0, 0)
     if pinged then
-        SB.pinger = name
+        SD.pinger = name
         pings[name] = GetTime()
     else
-        local x, y = SB.PlayerPos()
+        local x, y = SD.PlayerPos()
         fields.mx, fields.my = x, y
         if not x then
             Print("no minimap ping or map position here, so the test can't be placed. The call-out and list still show.")
@@ -605,12 +605,12 @@ local function Fmt(v)
     return tostring(v)
 end
 
-function SB.Status()
-    Print("version " .. SB.version)
+function SD.Status()
+    Print("version " .. SD.version)
     local zone = GetRealZoneText() or "?"
-    local x, y = SB.PlayerPos()
+    local x, y = SD.PlayerPos()
     Print("zone: " .. zone .. ", you at " .. (x and string.format("%.4f, %.4f", x, y) or "no map position"))
-    local w, h, src = SB.ZoneSize()
+    local w, h, src = SD.ZoneSize()
     if w then
         Print(string.format("zone size: %.0f x %.0f yd (%s)", w, h, src))
     else
@@ -629,7 +629,7 @@ function SB.Status()
                 (px and not (px == 0 and py == 0)) and string.format("%.4f, %.4f", px, py) or "none"))
         end
     end
-    if n == 0 then Print("WoW party: none. Teammates must be in your party for SurvivorBeacon to see them.") end
+    if n == 0 then Print("WoW party: none. Teammates must be in your party for SurvivorDown to see them.") end
     if type(AZS_PARTY) == "table" and table.getn(AZS_PARTY) > 0 then
         local names = ""
         for i = 1, table.getn(AZS_PARTY) do names = names .. " " .. Fmt(AZS_PARTY[i].name) end
@@ -644,17 +644,17 @@ function SB.Status()
         local px, py = Minimap:GetPingPosition()
         local e, n = PingYards()
         Print(string.format("minimap ping: raw %s, %s = %s yd east, %s yd north; last from %s",
-            Fmt(px), Fmt(py), Fmt(e), Fmt(n), Fmt(SB.pinger)))
+            Fmt(px), Fmt(py), Fmt(e), Fmt(n), Fmt(SD.pinger)))
     else
         Print("minimap ping: no GetPingPosition")
     end
-    local facing, fsrc = SB.Facing()
-    local model, ref = SB.FacingInfo()
+    local facing, fsrc = SD.Facing()
+    local model, ref = SD.FacingInfo()
     Print(string.format("facing: %s (%s); minimap arrow model %s; tracking movement by %s",
         facing and string.format("%.0f deg", math.deg(facing)) or "unknown", Fmt(fsrc), model,
         Fmt(ref)))
     local any = false
-    for name, d in pairs(SB.downs) do
+    for name, d in pairs(SD.downs) do
         any = true
         Print(string.format("down: %s via %s, map %s", name, Fmt(d.src),
             d.mx and string.format("%.4f, %.4f", d.mx, d.my) or "unknown"))
@@ -676,7 +676,7 @@ local TOGGLES = {
 }
 local TOGGLE_KEY = { button = "minimapButton" }
 
-local frame = CreateFrame("Frame", "SurvivorBeaconFrame")
+local frame = CreateFrame("Frame", "SurvivorDownFrame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
@@ -684,9 +684,9 @@ frame:RegisterEvent("CHAT_MSG_ADDON")
 frame:RegisterEvent("MINIMAP_PING")
 frame:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" then
-        if arg1 == "SurvivorBeacon" then
+        if arg1 == "SurvivorDown" then
             LoadSettings()
-            if SB.Refresh then SB.Refresh() end
+            if SD.Refresh then SD.Refresh() end
         end
     elseif event == "PLAYER_ENTERING_WORLD" or event == "ZONE_CHANGED_NEW_AREA" then
         if SetMapToCurrentZone then SetMapToCurrentZone() end
@@ -702,7 +702,7 @@ end)
 
 local elapsed = 0
 frame:SetScript("OnUpdate", function()
-    if db and next(SB.downs) then
+    if db and next(SD.downs) then
         TrackWalk()
     elseif walkRef then
         walkRef, walkEpoch = nil, walkEpoch + 1
@@ -713,46 +713,46 @@ frame:SetScript("OnUpdate", function()
     local now = GetTime()
     UpdateSelf(now)
     UpdateParty(now)
-    if SB.Tick then SB.Tick() end
+    if SD.Tick then SD.Tick() end
 end)
 
-SLASH_SURVIVORBEACON1 = "/asb"
-SLASH_SURVIVORBEACON2 = "/survivorbeacon"
-SlashCmdList["SURVIVORBEACON"] = function(msg)
+SLASH_SURVIVORDOWN1 = "/asd"
+SLASH_SURVIVORDOWN2 = "/survivordown"
+SlashCmdList["SURVIVORDOWN"] = function(msg)
     local cmd = string.lower(msg or "")
     cmd = string.gsub(cmd, "^%s+", "")
     cmd = string.gsub(cmd, "%s+$", "")
     if cmd == "" then
-        SB.ToggleOptions()
+        SD.ToggleOptions()
     elseif string.find(cmd, "^test") then
         local _, _, count = string.find(cmd, "^test%s+(%d)$")
-        SB.Test(tonumber(count))
+        SD.Test(tonumber(count))
     elseif cmd == "status" then
-        SB.Status()
+        SD.Status()
     elseif cmd == "unlock" or cmd == "lock" then
-        SB.Set("listLocked", cmd == "lock")
-        Print(cmd == "lock" and "list locked." or "list unlocked: drag it by its title. /asb lock when done.")
+        SD.Set("listLocked", cmd == "lock")
+        Print(cmd == "lock" and "list locked." or "list unlocked: drag it by its title. /asd lock when done.")
     elseif cmd == "debug" then
-        SB.debug = not SB.debug
-        Print("debug " .. (SB.debug and "on: downs, pings and messages show in chat." or "off."))
+        SD.debug = not SD.debug
+        Print("debug " .. (SD.debug and "on: downs, pings and messages show in chat." or "off."))
     elseif cmd == "reset" then
-        SB.Reset()
+        SD.Reset()
         Print("settings back to defaults.")
     elseif TOGGLES[cmd] then
         local key = TOGGLE_KEY[cmd] or cmd
-        SB.Set(key, not db[key])
+        SD.Set(key, not db[key])
         Print(TOGGLES[cmd] .. ": " .. (db[key] and "on" or "off"))
     else
         Print("commands:")
-        Print("  /asb - open or close the settings")
+        Print("  /asd - open or close the settings")
         for k, text in pairs(TOGGLES) do
             local key = TOGGLE_KEY[k] or k
-            Print(string.format("  /asb %s - %s (%s)", k, text, (db and db[key]) and "on" or "off"))
+            Print(string.format("  /asd %s - %s (%s)", k, text, (db and db[key]) and "on" or "off"))
         end
-        Print("  /asb unlock | lock - move the list")
-        Print("  /asb test [2-5] - a pretend teammate down where you stand for 30 s (or that many)")
-        Print("  /asb status - what the addon can see: party, positions, zone size")
-        Print("  /asb debug - show every down, ping and message in chat")
-        Print("  /asb reset - settings back to defaults")
+        Print("  /asd unlock | lock - move the list")
+        Print("  /asd test [2-5] - a pretend teammate down where you stand for 30 s (or that many)")
+        Print("  /asd status - what the addon can see: party, positions, zone size")
+        Print("  /asd debug - show every down, ping and message in chat")
+        Print("  /asd reset - settings back to defaults")
     end
 end

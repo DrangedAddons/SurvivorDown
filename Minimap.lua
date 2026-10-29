@@ -1,10 +1,10 @@
 -- Minimap button: click opens the settings, drag moves it around the minimap.
 -- SurvivorsDragonUi's square minimap picks up any Minimap child button with drag
 -- scripts and snaps it to the square's edge, so this only places it on a circle.
-local SB = SurvivorBeacon
+local SD = SurvivorDown
 local RADIUS = 80
 
-local button = CreateFrame("Button", "SurvivorBeaconMinimapButton", Minimap)
+local button = CreateFrame("Button", "SurvivorDownMinimapButton", Minimap)
 button:SetWidth(32)
 button:SetHeight(32)
 button:SetFrameStrata("MEDIUM")
@@ -33,7 +33,7 @@ border:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
 button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
 local function Place()
-    local angle = math.rad(SB.Get("minimapAngle") or 200)
+    local angle = math.rad(SD.Get("minimapAngle") or 200)
     button:ClearAllPoints()
     button:SetPoint("CENTER", Minimap, "CENTER", RADIUS * math.cos(angle), RADIUS * math.sin(angle))
 end
@@ -45,7 +45,7 @@ local function Drag()
     if not cx or not x or not scale or scale <= 0 then return end
     x, y = x / scale - cx, y / scale - cy
     if x == 0 and y == 0 then return end
-    SB.SetQuiet("minimapAngle", math.deg(math.atan2(y, x)))
+    SD.SetQuiet("minimapAngle", math.deg(math.atan2(y, x)))
     Place()
 end
 
@@ -63,21 +63,21 @@ button:SetScript("OnDragStop", function()
 end)
 button:SetScript("OnClick", function()
     if dragging or GetTime() < ignoreClickUntil then return end
-    SB.ToggleOptions()
+    SD.ToggleOptions()
 end)
 button:SetScript("OnEnter", function()
     if dragging then return end
     GameTooltip:SetOwner(this, "ANCHOR_LEFT")
-    GameTooltip:SetText("SurvivorBeacon")
+    GameTooltip:SetText("SurvivorDown")
     GameTooltip:AddLine("Click: settings", 1, 1, 1)
     GameTooltip:AddLine("Drag: move this button", 1, 1, 1)
-    GameTooltip:AddLine("/asb", 1, 0.82, 0)
+    GameTooltip:AddLine("/asd", 1, 0.82, 0)
     GameTooltip:Show()
 end)
 button:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-function SB.UpdateMinimapButton()
-    if SB.Get("minimapButton") then
+function SD.UpdateMinimapButton()
+    if SD.Get("minimapButton") then
         button:Show()
         Place()
     else

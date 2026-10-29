@@ -20,17 +20,17 @@ jobs:
 
       - name: Check the tag matches the .toc version
         run: |
-          TOC_VERSION=$(grep -m1 '^## Version:' SurvivorBeacon.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')
+          TOC_VERSION=$(grep -m1 '^## Version:' SurvivorDown.toc | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')
           if [ "v${TOC_VERSION}" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} doesn't match SurvivorBeacon.toc version ${TOC_VERSION}" >&2
+            echo "Tag ${GITHUB_REF_NAME} doesn't match SurvivorDown.toc version ${TOC_VERSION}" >&2
             exit 1
           fi
 
       - name: Build zip
         run: |
-          mkdir -p build/SurvivorBeacon
-          rsync -a --exclude='.git*' --exclude='.github' --exclude='build' --exclude='screenshots' --exclude='tools' ./ build/SurvivorBeacon/
-          cd build && zip -qr "../SurvivorBeacon-${GITHUB_REF_NAME}.zip" SurvivorBeacon
+          mkdir -p build/SurvivorDown
+          rsync -a --exclude='.git*' --exclude='.github' --exclude='build' --exclude='screenshots' --exclude='tools' ./ build/SurvivorDown/
+          cd build && zip -qr "../SurvivorDown-${GITHUB_REF_NAME}.zip" SurvivorDown
 
       # Every CHANGELOG section since the previous release, so versions that were never tagged on
       # their own still get announced. Each older version gets its own sub-heading.
@@ -46,12 +46,12 @@ jobs:
             found && /^## / { if (p == "## ") exit; sub(/^## /, "### "); print; next }
             found { print }
           ' > notes.md
-          if [ ! -s notes.md ]; then echo "SurvivorBeacon ${GITHUB_REF_NAME}" > notes.md; fi
+          if [ ! -s notes.md ]; then echo "SurvivorDown ${GITHUB_REF_NAME}" > notes.md; fi
           cat notes.md
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" "SurvivorBeacon-${GITHUB_REF_NAME}.zip" \
-            --title "SurvivorBeacon ${GITHUB_REF_NAME}" --notes-file notes.md
+          gh release create "${GITHUB_REF_NAME}" "SurvivorDown-${GITHUB_REF_NAME}.zip" \
+            --title "SurvivorDown ${GITHUB_REF_NAME}" --notes-file notes.md
