@@ -8,8 +8,11 @@ An [Azeroth Survivors](https://discord.gg/azerothsurvivors) addon. When someone 
 - **Beam:** a skull, a light beam and a pulsing ring on the ground under their nameplate. Friendly nameplates are turned on while someone's down (and off again after) so there's a plate to hang it on.
 - **Skull icon:** the skull raid icon on whoever is down.
 - **List:** who's down, how far and which way ("48 yd NE"). While you're reviving someone it shows how far along you are. Click a name to target them.
+- **Arrows:** beside each name in the list, an arrow in their class colour pointing at them. It hides once you're on top of them.
 
-The game has no way for an addon to draw at a spot in the world, so the beam needs the teammate's nameplate to be on screen. The minimap pin and the list work at any distance.
+The game has no way for an addon to draw at a spot in the world, so the beam needs the teammate's nameplate to be on screen. The minimap pin, the list and the arrows work at any distance.
+
+The game doesn't tell addons which way you're facing either. The arrows use the minimap's player arrow if this client lets an addon read it, and otherwise the way you last moved: right while you run toward something, wrong while you strafe or backpedal, and unchanged while you stand still.
 
 ## Positions
 The game gives addons no world position for players, and instances have no map coordinates. So while you're down, SurvivorBeacon pings your own spot on the minimap every 3 s. The game keeps a ping fixed in the world and tells each teammate where it is from them, which gives the list's distance and the minimap pin. Everyone in the party needs SurvivorBeacon for this.
@@ -22,7 +25,7 @@ Click the minimap button or type `/asb` to open the settings. Each part above ha
 ## Commands
 - `/asb`: open or close the settings
 - `/asb help`: list the commands and which parts are on
-- `/asb alert`, `sound`, `minimap`, `plate`, `friendplates`, `skull`, `list`, `button`: turn that part on or off
+- `/asb alert`, `sound`, `minimap`, `plate`, `friendplates`, `skull`, `list`, `arrow`, `button`: turn that part on or off
 - `/asb unlock` / `/asb lock`: move the list (or the Unlock list button in the settings)
 - `/asb test`: a pretend teammate down where you stand for 30 s, placed by a ping. Walk away to check it stays put. With a target, it uses the target's name, so the beam shows on the target's plate.
 - `/asb status`: what the addon can see: your party, positions, the zone's size, the game's revive line

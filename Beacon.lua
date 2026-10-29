@@ -1,9 +1,11 @@
 -- What SurvivorBeacon draws: the call-out, the minimap pins, the beam over a downed teammate's
--- nameplate and the list. Core.lua decides who's down and where.
+-- nameplate, and the list with an arrow per row. Core.lua decides who's down and where.
 local SB = SurvivorBeacon
 
 local SKULL = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 local GLOW = "Interface\\Buttons\\UI-ActionButton-Border"
+local ARROW = "Interface\\Minimap\\MinimapArrow" -- points up
+local ARROW_SIZE = 24
 local FONT = "Fonts\\FRIZQT__.TTF"
 local BEAM_DROP = 100 -- px from the nameplate down to about the feet, at the game's camera distance
 
@@ -20,6 +22,21 @@ end
 
 local function Pulse(period)
     return math.mod(GetTime(), period) / period
+end
+
+-- Turns `tex` `a` radians counter-clockwise on screen. Each corner (x right, y up, from the
+-- centre) shows the image at that corner turned back by `a`. Corners that land outside the
+-- image show its transparent edge.
+local function Rotate(tex, a)
+    local c, s = math.cos(a), math.sin(a)
+    local function At(x, y)
+        return 0.5 + x * c + y * s, 0.5 + x * s - y * c
+    end
+    local ulx, uly = At(-0.5, 0.5)
+    local llx, lly = At(-0.5, -0.5)
+    local urx, ury = At(0.5, 0.5)
+    local lrx, lry = At(0.5, -0.5)
+    tex:SetTexCoord(ulx, uly, llx, lly, urx, ury, lrx, lry)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -265,6 +282,13 @@ local function GetRow(i)
     r.info = r:CreateFontString(nil, "OVERLAY")
     r.info:SetFont(FONT, 12, "OUTLINE")
     r.info:SetPoint("RIGHT", r, "RIGHT", 0, 0)
+    -- Just outside the list's right edge, level with the row.
+    r.arrow = r:CreateTexture(nil, "OVERLAY")
+    r.arrow:SetTexture(ARROW)
+    r.arrow:SetWidth(ARROW_SIZE)
+    r.arrow:SetHeight(ARROW_SIZE)
+    r.arrow:SetPoint("LEFT", r, "RIGHT", 8, 0)
+    r.arrow:Hide()
     r:SetScript("OnClick", function()
         if this.unit and UnitExists(this.unit) then
             TargetUnit(this.unit)
@@ -298,10 +322,29 @@ local function Sorted()
     return out
 end
 
--- Per frame: pin and beam positions follow you and pulse.
+-- The row's arrow, turned toward its down. Hidden with no direction, no facing, or once
+-- you're on top of them.
+local function PointArrow(r)
+    local d = r.down and SB.downs[r.down]
+    local east, north
+    if d and SB.Get("arrow") then east, north = SB.Offset(d) end
+    local facing = east and SB.Facing()
+    if not facing or east * east + north * north < 16 then
+        r.arrow:Hide()
+        return
+    end
+    -- Same convention as facing: 0 = north, counter-clockwise.
+    Rotate(r.arrow, math.atan2(-east, north) - facing)
+    r.arrow:Show()
+end
+
+-- Per frame: pins, beams and arrows follow you, and pins and beams pulse.
 local driver = CreateFrame("Frame")
 driver:Hide()
 driver:SetScript("OnUpdate", function()
+    for i = 1, table.getn(rows) do
+        if rows[i]:IsShown() then PointArrow(rows[i]) end
+    end
     local phase = Pulse(1)
     for name, p in pairs(pins) do
         if p:IsShown() then
@@ -364,6 +407,7 @@ function SB.Tick()
             local cr, cg, cb = ClassColor(d.class)
             r.name:SetText(d.name)
             r.name:SetTextColor(cr, cg, cb)
+            r.arrow:SetVertexColor(cr, cg, cb)
             if revive.reviving == d.name and type(revive.rshare) == "number" then
                 r.info:SetText(string.format("reviving %d%%", revive.rshare * 100))
                 r.info:SetTextColor(0.3, 1, 0.3)

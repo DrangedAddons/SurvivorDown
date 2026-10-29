@@ -32,6 +32,7 @@ SB.defaults = {
     friendPlates = true, -- turn friendly nameplates on while someone's down, so there's a plate to mark
     skull = true, -- skull raid icon on whoever is down
     list = true, -- the list of who's down, how far and which way
+    arrow = true, -- an arrow beside each list row pointing at them
     listLocked = true,
     listX = nil, -- saved list position (offset from the bottom-left); nil = default
     listY = nil,
@@ -205,16 +206,121 @@ local function PingYards()
 end
 SB.PingYards = PingYards
 
+---------------------------------------------------------------------------------------------
+-- Where you've walked and which way you face, for the list's arrows
+
+-- Your position in yards from wherever tracking started. From map coordinates when there are
+-- some, else from the live minimap ping: a ping stays put in the world, so however its offset
+-- changes is how you moved. walkEpoch goes up whenever neither is available, since positions
+-- remembered before that no longer line up.
+local walkE, walkN, walkEpoch = 0, 0, 0
+local walkRef, refE, refN -- what the last sample came from ("map" or a pinger's name) and where
+local headE, headN = 0, 0 -- walk position at the last heading update
+local HEADING_STEP = 1.5 -- yd you have to move before the heading updates
+local MAP_JUMP = 30 -- yd in one frame on the map means a zone change or a teleport, not a step
+SB.heading = nil -- radians, 0 = north, counter-clockwise: which way you last moved
+
+local function PingRef()
+    local name = SB.pinger
+    local d = name and SB.downs[name]
+    if not d or not pings[name] then return nil end
+    if not d.test and GetTime() - pings[name] >= PING_STALE then return nil end
+    local e, n = PingYards()
+    if e then return name, -e, -n end
+end
+
+-- Every frame while someone's down.
+local function TrackWalk()
+    local ref, e, n
+    -- Not SB.PlayerPos: that calls SetMapToCurrentZone, too much for every frame.
+    local x, y = GetPlayerMapPosition("player")
+    local w, h = SB.ZoneSize()
+    if x and not (x == 0 and y == 0) and w then
+        ref, e, n = "map", x * w, -y * h
+    else
+        ref, e, n = PingRef()
+    end
+    if not ref then
+        if walkRef then walkEpoch = walkEpoch + 1 end
+        walkRef = nil
+        return
+    end
+    if ref == walkRef then
+        local dE, dN = e - refE, n - refN
+        if ref == "map" and dE * dE + dN * dN > MAP_JUMP * MAP_JUMP then
+            walkEpoch = walkEpoch + 1
+            headE, headN = walkE, walkN
+        else
+            walkE, walkN = walkE + dE, walkN + dN
+        end
+    end
+    -- A new reference costs one frame of movement; positions still line up.
+    walkRef, refE, refN = ref, e, n
+    local mE, mN = walkE - headE, walkN - headN
+    if mE * mE + mN * mN >= HEADING_STEP * HEADING_STEP then
+        SB.heading = math.atan2(-mE, mN)
+        headE, headN = walkE, walkN
+    end
+end
+
+-- The minimap's player arrow, if this client gives it to addons as a Model. Only trusted once
+-- its facing has changed, since a model nobody turns reports 0 forever.
+local arrowModel, modelSearched, modelFirst, modelLive
+
+local function ArrowModel()
+    if modelSearched then return arrowModel end
+    modelSearched = true
+    local kids = { Minimap:GetChildren() }
+    for i = 1, table.getn(kids) do
+        local f = kids[i]
+        if f.GetObjectType and f:GetObjectType() == "Model" and f.GetFacing and f.GetModel then
+            local ok, m = pcall(f.GetModel, f)
+            if ok and string.find(string.lower(tostring(m)), "minimaparrow", 1, true) then
+                arrowModel = f
+            end
+        end
+    end
+    return arrowModel
+end
+
+-- Which way you face: radians, 0 = north, counter-clockwise, and where that came from. nil
+-- until there's a source.
+function SB.Facing()
+    local m = ArrowModel()
+    if m then
+        local ok, f = pcall(m.GetFacing, m)
+        if ok and type(f) == "number" then
+            if modelFirst == nil then
+                modelFirst = f
+            elseif f ~= modelFirst then
+                modelLive = true
+            end
+            if modelLive then return f, "minimap arrow" end
+        end
+    end
+    if SB.heading then return SB.heading, "movement" end
+end
+
+function SB.FacingInfo()
+    return ArrowModel() and (modelLive and "live" or "found, not turning yet") or "none", walkRef
+end
+
 -- Where a down is from here: yards east, yards north, and true if those are real yards. With
 -- no zone size the result is only good for a direction (3:2 map, unit-less) and the third
 -- value is false. nil when either position is unknown or they're in another zone.
 function SB.Offset(d)
     local pinged = pings[d.name]
     if pinged and (d.test or GetTime() - pinged < PING_STALE) then
-        -- Live while theirs is the last ping; otherwise where it was when someone else pinged.
         if d.name == SB.pinger then
+            -- Theirs is the last ping, so it can be read live.
             local e, n = PingYards()
-            if e then d.pe, d.pn, d.src = e, n, "ping" end
+            if e then
+                d.pe, d.pn, d.src = e, n, "ping"
+                d.wE, d.wN, d.wEpoch = walkE + e, walkN + n, walkEpoch
+            end
+        elseif d.wE and d.wEpoch == walkEpoch then
+            -- Someone else has pinged since: follow how far you've walked from that spot.
+            d.pe, d.pn = d.wE - walkE, d.wN - walkN
         end
         if d.pe then return d.pe, d.pn, true end
     end
@@ -523,6 +629,11 @@ function SB.Status()
     else
         Print("minimap ping: no GetPingPosition")
     end
+    local facing, fsrc = SB.Facing()
+    local model, ref = SB.FacingInfo()
+    Print(string.format("facing: %s (%s); minimap arrow model %s; tracking movement by %s",
+        facing and string.format("%.0f deg", math.deg(facing)) or "unknown", Fmt(fsrc), model,
+        Fmt(ref)))
     local on = SB.FriendPlatesOn and SB.FriendPlatesOn()
     Print("friendly nameplates: " .. (on == nil and "unknown (no CVar)" or (on and "on" or "off")))
     local rx, ry = GetPlayerMapPosition("player")
@@ -565,6 +676,7 @@ local TOGGLES = {
     friendplates = "turn friendly nameplates on while someone's down",
     skull = "skull icon on whoever is down",
     list = "list of who's down",
+    arrow = "arrow beside the list pointing at each",
     button = "minimap button",
 }
 local TOGGLE_KEY = { friendplates = "friendPlates", button = "minimapButton" }
@@ -595,6 +707,11 @@ end)
 
 local elapsed = 0
 frame:SetScript("OnUpdate", function()
+    if db and next(SB.downs) then
+        TrackWalk()
+    elseif walkRef then
+        walkRef, walkEpoch = nil, walkEpoch + 1
+    end
     elapsed = elapsed + arg1
     if elapsed < 0.2 or not db then return end
     elapsed = 0

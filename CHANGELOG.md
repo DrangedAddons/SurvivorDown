@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+- **Arrows:** each row of the list gets an arrow just outside its right edge, in the downed teammate's class colour, pointing at them. It hides once you're within 4 yd. `/asb arrow` or the new tickbox turns them off.
+- The game gives addons no facing, so the arrow takes it from the minimap's player arrow if this client lets an addon read it, and otherwise from the way you last moved. On movement it's right while you run forward, wrong while you strafe or backpedal, and holds while you stand still.
+- With more than one teammate down, only the latest ping can be read live. The others' distances used to stay where they were until their next ping (every 3 s); they now follow how you've moved since.
+- `/asb status` shows where facing comes from.
+
 ## 0.3.1
 - `/asb debug`: shows each step in chat. On the downed player's side: going down (and why), each ping and each message sent. On everyone else's: each minimap ping (with what the game reports) and each message heard.
 - A ping whose sender the game doesn't name is now taken as the downed teammate's, when exactly one teammate's SurvivorBeacon says they're down.
